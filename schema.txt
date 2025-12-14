@@ -1,0 +1,22 @@
+1. Nodes: 
+1. Season: [season_name] 
+2. Gameweek: [season, GW_number] 
+3. Fixture: [season, fixture_number], kickoff_time 
+4. Team: [name] 
+5. Player: [player_name, player_element] 
+6. Position: [name] 
+*** [ ] represent unique identifiers. (If more than one attribute 
+is inside the bracket, then the node is uniquely identified by 
+all attributes inside the square brackets. 
+2. Relationships: 
+● (Season) - [:HAS_GW]-> (Gameweek) 
+● (Gameweek) - [:HAS_FIXTURE]-> (Fixture) 
+● (Fixture) - [:HAS_HOME_TEAM]-> (Team) 
+● (Fixture) - [:HAS_AWAY_TEAM]-> (Team) 
+● (Player) - [:PLAYS_AS]-> (Position) 
+● (Player) - [:PLAYED_IN]-> (Fixture); 
+● (Player) - [:PLAYS_FOR]-> (Team); 
+○ Properties: minutes, goals_scored, assists, total_points, bonus, 
+clean_sheets, goals_conceded, own_goals, penalties_saved, 
+penalties_missed, yellow_cards, red_cards, saves, bps, influence, 
+creativity, threat, ict_index, form
