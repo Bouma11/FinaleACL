@@ -94,21 +94,19 @@ def call_llm(user_question: str, model: str) -> str:
     task_text = (
     "IMPORTANT: You MUST always provide a response. Never return empty text.\n\n"
     
-    "SCOPE CHECK:\n"
-    "- Questions about FPL players, teams, strategies, transfers, stats = IN SCOPE (answer them)\n"
-    "- Questions like 'best player', 'who is the best player', 'top scorers' = IN SCOPE (answer them)\n"
-    "- Random text, greetings, unrelated topics = OUT OF SCOPE (politely decline)\n\n"
+    "SPECIAL INSTRUCTIONS FOR COMPARISON QUERIES:\n"
+    "When the user asks to compare players (e.g., 'compare X and Y'):\n"
+    "1. First check if BOTH players are mentioned in the CONTEXT\n"
+    "2. If yes, extract ALL their stats from the CONTEXT\n"
+    "3. Create a detailed comparison table or bullet points\n"
+    "4. Include: goals, points, assists, clean sheets (if relevant), bonus points\n"
+    "5. Provide a clear conclusion about who performed better overall\n\n"
     
-    "If the question is OUT OF SCOPE:\n"
-    "Respond with: 'I apologize, but that question is outside my scope. I can only help with FPL and Premier League related questions.'\n\n"
-    
-    "If the question is IN SCOPE:\n"
-    "- Use ONLY the CONTEXT provided below\n"
-    "- Give direct, concise answers - no preambles\n"
-    "- 'best player' or 'who is the best player' should be treated identically\n"
-    "- For lists: use numbered/bulleted format\n"
-    "- For single answers: just state the answer (e.g., 'Haaland')\n"
-    "- If CONTEXT lacks the answer: say 'I don't have that information available.'\n\n"
+    "EXAMPLE FORMAT for player comparisons:\n"
+    "Comparison: Player A vs Player B\n"
+    "• Player A: X goals, Y points, Z assists, W bonus points\n"
+    "• Player B: A goals, B points, C assists, D bonus points\n"
+    "Conclusion: [Who was better and why]\n\n"
     
     "CONTEXT:\n{context}\n\n"
     "QUESTION: {question}\n\n"

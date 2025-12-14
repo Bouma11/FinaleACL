@@ -166,7 +166,9 @@ class FPLGraphRetrieval:
                 WHERE gw.GW_number >= $gameweek - 5
                 RETURN p.player_name AS player,
                        AVG(played.form) AS avg_form,
-                       SUM(played.total_points) AS recent_points
+                       SUM(played.total_points) AS recent_points,
+                       played.goals_scored AS recent_goals,
+                       played.assists AS recent_assists
                 ORDER BY avg_form DESC
                 LIMIT $limit
             """,
@@ -211,25 +213,24 @@ class FPLGraphRetrieval:
         
         # Map intents to query templates (ordered by preference)
         self.intent_to_query = {
-            'recommendation': ['top_players_by_position', 'top_scorers', 'top_assisters', 'bonus_leaders'],
-            'performance_query': ['player_season_summary', 'player_gameweek_performance', 'top_scorers'],
-            'comparison': ['compare_players', 'player_season_summary'],
-            'player_search': ['player_season_summary', 'players_by_team', 'top_scorers'],
-            'fixture_query': ['team_fixtures', 'players_by_team'],
-            'form_query': ['players_by_form', 'top_scorers'],
-            'team_analysis': ['players_by_team', 'team_fixtures', 'top_scorers'],
-            'value_analysis': ['top_players_by_position', 'top_scorers', 'bonus_leaders'],
-            'general_query': ['top_scorers', 'top_assisters', 'bonus_leaders']
-        }
+        'recommendation': ['top_scorers', 'top_assisters', 'clean_sheet_leaders', 'bonus_leaders', 'top_players_by_position'],
+        'performance_query': ['player_gameweek_performance', 'player_season_summary', 'players_by_form'],
+        'comparison': ['compare_players', 'top_scorers', 'player_season_summary'],
+        'player_search': ['player_season_summary', 'player_gameweek_performance', 'players_by_form'],
+        'fixture_query': ['team_fixtures', 'players_by_team'],
+        'form_query': ['players_by_form', 'player_season_summary', 'top_scorers'],
+        'team_analysis': ['players_by_team', 'team_fixtures', 'top_scorers'],
+        'value_analysis': ['top_players_by_position', 'players_by_form', 'bonus_leaders'],
+        'general_query': ['top_scorers', 'top_assisters', 'bonus_leaders', 'clean_sheet_leaders']
+    }
     
     def select_query(self, intent: str, entities: Dict) -> str:
         """Select appropriate query template based on intent and available entities.
         
         Priority order:
-        1. Metric-based queries (clean_sheets, assists, bonus, cards)
-        2. Entity-specific queries (players, teams, gameweeks, positions)
-        3. Intent-based queries (from intent_to_query mapping)
-        4. Generic fallback
+        1. Entity-specific queries (players, teams, gameweeks, positions)
+        2. Intent-based queries (from intent_primary_query mapping)
+        3. Generic fallback (top_scorers)
         """
         
         metrics = entities.get('metrics', [])
@@ -239,21 +240,10 @@ class FPLGraphRetrieval:
         gameweeks = entities.get('gameweeks', [])
         
         # ─────────────────────────────────────────────────────────────
-        # PRIORITY 1: METRIC-SPECIFIC QUERIES (HIGHEST CONFIDENCE)
+        # PRIORITY 1: ENTITY-SPECIFIC QUERIES (HIGHEST CONFIDENCE)
         # ─────────────────────────────────────────────────────────────
-        if 'clean_sheets' in metrics:
-            return 'clean_sheet_leaders'
-        if 'assists' in metrics:
-            return 'top_assisters'
-        if 'bonus' in metrics or 'bonus_points' in metrics:
-            return 'bonus_leaders'
-        if 'cards' in metrics or 'yellow_cards' in metrics or 'red_cards' in metrics:
-            return 'most_cards'
         
-        # ─────────────────────────────────────────────────────────────
-        # PRIORITY 2: ENTITY-SPECIFIC QUERIES
-        # ─────────────────────────────────────────────────────────────
-        # Two players = comparison query
+        # Two players = comparison query (even if intent isn't 'comparison')
         if len(players) >= 2:
             return 'compare_players'
         
@@ -283,28 +273,26 @@ class FPLGraphRetrieval:
         if len(positions) >= 1:
             return 'top_players_by_position'
         
-        # ─────────────────────────────────────────────────────────────
-        # PRIORITY 3: INTENT-BASED QUERIES
-        # ─────────────────────────────────────────────────────────────
-        # Direct intent mapping without entity requirements
-        intent_primary_query = {
-            'recommendation': 'top_scorers',
-            'performance_query': 'player_season_summary',
-            'comparison': 'top_scorers',
-            'player_search': 'player_season_summary',
-            'fixture_query': 'team_fixtures',
-            'form_query': 'players_by_form',
-            'team_analysis': 'players_by_team',
-            'value_analysis': 'top_scorers',
-            'general_query': 'top_scorers'
-        }
-        
-        # Return query mapped directly from intent
-        if intent in intent_primary_query:
-            return intent_primary_query[intent]
+        # Metric-specific queries
+        if 'clean_sheets' in metrics:
+            return 'clean_sheet_leaders'
+        if 'assists' in metrics:
+            return 'top_assisters'
+        if 'bonus' in metrics or 'bonus_points' in metrics:
+            return 'bonus_leaders'
+        if 'cards' in metrics or 'yellow_cards' in metrics or 'red_cards' in metrics:
+            return 'most_cards'
         
         # ─────────────────────────────────────────────────────────────
-        # PRIORITY 4: GENERIC FALLBACK
+        # PRIORITY 2: INTENT-BASED QUERIES (using FIXED mapping)
+        # ─────────────────────────────────────────────────────────────
+        
+        # Use the corrected intent_primary_query mapping
+        if intent in self.intent_primary_query:
+            return self.intent_primary_query[intent]
+        
+        # ─────────────────────────────────────────────────────────────
+        # PRIORITY 3: GENERIC FALLBACK
         # ─────────────────────────────────────────────────────────────
         return 'top_scorers'
     
