@@ -222,6 +222,18 @@ class FPLGraphRetrieval:
         'team_analysis': ['players_by_team', 'team_fixtures', 'top_scorers'],
         'value_analysis': ['top_players_by_position', 'players_by_form', 'bonus_leaders'],
         'general_query': ['top_scorers', 'top_assisters', 'bonus_leaders', 'clean_sheet_leaders']
+
+    }
+        self.intent_primary_query = {
+        'recommendation': 'top_scorers',
+        'performance_query': 'player_season_summary',
+        'comparison': 'top_scorers',  # This is the bug! Should be 'compare_players'
+        'player_search': 'player_season_summary',
+        'fixture_query': 'team_fixtures',
+        'form_query': 'players_by_form',
+        'team_analysis': 'players_by_team',
+        'value_analysis': 'top_scorers',
+        'general_query': 'top_scorers'
     }
     
     def select_query(self, intent: str, entities: Dict) -> str:
