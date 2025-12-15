@@ -221,18 +221,19 @@ class FPLGraphRetrieval:
         'form_query': ['players_by_form', 'player_season_summary', 'top_scorers'],
         'team_analysis': ['players_by_team', 'team_fixtures', 'top_scorers'],
         'value_analysis': ['top_players_by_position', 'players_by_form', 'bonus_leaders'],
-        'general_query': ['top_scorers', 'top_assisters', 'bonus_leaders', 'clean_sheet_leaders']
-
-    }
+        'general_query': ['top_scorers', 'top_assisters', 'bonus_leaders', 'clean_sheet_leaders'],
+        'player_team_query': ['player_team', 'player_season_summary', 'players_by_team']
+        }
         self.intent_primary_query = {
         'recommendation': 'top_scorers',
-        'performance_query': 'player_season_summary',
+        'performance_query': 'player_gameweek_performance',
         'comparison': 'compare_players',  # This is the bug! Should be 'compare_players'
         'player_search': 'player_season_summary',
         'fixture_query': 'team_fixtures',
         'form_query': 'players_by_form',
         'team_analysis': 'players_by_team',
-        'value_analysis': 'top_scorers',
+        'player_team_query': 'player_team',
+        'value_analysis': 'top_players_by_position',
         'general_query': 'top_scorers'
     }
     
@@ -298,7 +299,7 @@ class FPLGraphRetrieval:
         # ─────────────────────────────────────────────────────────────
         # PRIORITY 2: INTENT-BASED QUERIES (using FIXED mapping)
         # ─────────────────────────────────────────────────────────────
-        
+
         # Use the corrected intent_primary_query mapping
         if intent in self.intent_primary_query:
             return self.intent_primary_query[intent]
@@ -2434,9 +2435,9 @@ if __name__ == "__main__":
     # ═════════════════════════════════════════════════════════════════════════
     # NEO4J CONNECTION VARIABLES
     # ═════════════════════════════════════════════════════════════════════════
-    NEO4J_URI = "neo4j+s://25702760.databases.neo4j.io"
+    NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io "
     NEO4J_USER = "neo4j"
-    NEO4J_PASSWORD = "SV_Lrpym7maVcswKvLiIA8Im4mSlttcZcIyVSeKH9-Y"
+    NEO4J_PASSWORD = "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8"
     
     # Test 1: Show the TWO EXPERIMENTS (Baseline vs Baseline+Embeddings)
     test_each_template_with_example_query()
