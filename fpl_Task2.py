@@ -227,7 +227,7 @@ class FPLGraphRetrieval:
         self.intent_primary_query = {
         'recommendation': 'top_scorers',
         'performance_query': 'player_season_summary',
-        'comparison': 'top_scorers',  # This is the bug! Should be 'compare_players'
+        'comparison': 'compare_players',  # This is the bug! Should be 'compare_players'
         'player_search': 'player_season_summary',
         'fixture_query': 'team_fixtures',
         'form_query': 'players_by_form',
