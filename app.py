@@ -133,10 +133,9 @@ with st.sidebar:
     st.markdown("### 🧠 1. Generation Model")
     st.caption("Select the LLM that generates the final answer.")
     llm_map = {
-        "Llama 3 70B": "meta-llama/llama-3.3-70b-instruct:free",
-        "Mistral 7B": "mistralai/mistral-7b-instruct:free",
-        "Gemini Flash": "google/gemini-2.0-flash-exp:free",
-        "Devstral": "mistralai/devstral-2512:free"
+        "Llama 3.3 70B": "meta-llama/llama-3.3-70b-instruct:free",
+        "Devstral 2512": "mistralai/devstral-2512:free",
+        "Nemotron Nano 30B": "nvidia/nemotron-3-nano-30b-a3b:free"
     }
     llm_choice = st.selectbox("LLM Model", list(llm_map.keys()), index=0)
     selected_llm_id = llm_map[llm_choice]
