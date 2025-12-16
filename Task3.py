@@ -1,26 +1,30 @@
-from kaggle_secrets import UserSecretsClient
-user_secrets = UserSecretsClient()
-from kaggle_secrets import UserSecretsClient
-user_secrets = UserSecretsClient()
-secret_value_0 = user_secrets.get_secret("HFSecret")
-secret_value_1 = user_secrets.get_secret("hfToken")
-secret_value_2 = user_secrets.get_secret("j")
-secret_value_3 = user_secrets.get_secret("LLM Token")
-secret_value_4 = user_secrets.get_secret("openrouter")
-secret_value_5 = user_secrets.get_secret("openrouterKey")
-secret_value_6 = user_secrets.get_secret("preprocessorKey")
-# import streamlit as st
+# ─────────────────────────────────────────────────────────────
+# CONFIGURATION LOADING FROM config.txt
+# ─────────────────────────────────────────────────────────────
+# This file reads all secrets and configuration from config.txt
+# Expected keys in config.txt (supports multiple naming conventions):
+#   - Neo4j: URI or NEO4J_URI, USERNAME or NEO4J_USER, PASSWORD or NEO4J_PASSWORD
+#   - HuggingFace: HF_TOKEN or hfToken or HFSecret or LLM_Token
+#   - OpenRouter: OPENROUTER_KEY or openrouterKey or openrouter
+# ─────────────────────────────────────────────────────────────
+import os
 
-# # Access your secrets
-# secret_value_0 = st.secrets["HFSecret"]
-# secret_value_1 = st.secrets["hfToken"]
-# secret_value_2 = st.secrets["LLM_Token"]
-# secret_value_4 = st.secrets["openrouter"]
-# secret_value_5 = st.secrets["openrouterKey"]
-#  secret_value_6 = st.secrets["preprocessorKey"]
+def load_config():
+    """Load all configuration from config.txt file"""
+    config = {}
+    try:
+        with open("config.txt", "r") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    config[k.strip()] = v.strip()
+    except FileNotFoundError:
+        print("⚠️  config.txt not found. Using environment variables or defaults.")
+    return config
 
-
-
+# Load configuration
+_config = load_config()
 
 # ─────────────────────────────────────────────────────────────
 # REQUIRED PACKAGES (install if needed)
@@ -34,42 +38,77 @@ from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import Dict, List, Any
+from openai import OpenAI
 
 # Import the main class
 from fpl_Task2 import FPLGraphRetrieval
 
 # ─────────────────────────────────────────────────────────────
-# NEO4J CONFIGURATION
+# NEO4J CONFIGURATION (supports multiple naming conventions)
 # ─────────────────────────────────────────────────────────────
-NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8"
+NEO4J_URI = (
+    _config.get("URI") or 
+    _config.get("NEO4J_URI") or 
+    os.getenv("NEO4J_URI", "neo4j+s://1da86c19.databases.neo4j.io")
+)
+NEO4J_USER = (
+    _config.get("USERNAME") or 
+    _config.get("NEO4J_USER") or 
+    os.getenv("NEO4J_USER", "neo4j")
+)
+NEO4J_PASSWORD = (
+    _config.get("PASSWORD") or 
+    _config.get("NEO4J_PASSWORD") or 
+    os.getenv("NEO4J_PASSWORD", "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8")
+)
 
 # ─────────────────────────────────────────────────────────────
-# USAGE
+# API KEYS FROM CONFIG (supports multiple naming conventions)
 # ─────────────────────────────────────────────────────────────
-# Initialize
+# Try multiple possible key names from config.txt
+HF_TOKEN = (
+    _config.get("HF_TOKEN") or 
+    _config.get("hfToken") or 
+    _config.get("HFSecret") or 
+    _config.get("LLM_Token") or
+    os.getenv("HF_TOKEN", "")
+)
+
+OPENROUTER_KEY = (
+    _config.get("OPENROUTER_KEY") or 
+    _config.get("openrouterKey") or 
+    _config.get("openrouter") or
+    os.getenv("OPENROUTER_KEY", "")
+)
+
+# ─────────────────────────────────────────────────────────────
+# INITIALIZE RETRIEVER
+# ─────────────────────────────────────────────────────────────
 retriever = FPLGraphRetrieval(
     neo4j_uri=NEO4J_URI,
     neo4j_user=NEO4J_USER,
     neo4j_password=NEO4J_PASSWORD,
-    hf_token=secret_value_1,  # Optional, for LLM mode
-    use_llm=True  # Set True to use LLM for entity extraction
+    hf_token=HF_TOKEN if HF_TOKEN else None,  # Optional, for LLM mode
+    use_llm=True if HF_TOKEN else False  # Set True to use LLM for entity extraction
 )
 
-
-
-
-from openai import OpenAI
-from kaggle_secrets import UserSecretsClient
+# ─────────────────────────────────────────────────────────────
+# LLM FUNCTION
+# ─────────────────────────────────────────────────────────────
 def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') -> str:
     """
     Takes user question, handles retrieval with specified embedding type.
     """
 
-    # 1️⃣ Get API key
-    user_secrets = UserSecretsClient()
-    openrouter_key = secret_value_5
+    # 1️⃣ Get API key from config
+    openrouter_key = OPENROUTER_KEY
+    if not openrouter_key:
+        # Try reloading config in case it was updated
+        _config_reload = load_config()
+        openrouter_key = _config_reload.get("OPENROUTER_KEY", os.getenv("OPENROUTER_KEY", ""))
+    
+    if not openrouter_key:
+        raise ValueError("OPENROUTER_KEY not found. Please set it in config.txt or environment variables.")
 
     # 2️⃣ Initialize OpenRouter client
     client = OpenAI(
