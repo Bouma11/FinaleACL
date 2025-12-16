@@ -2,13 +2,22 @@ from kaggle_secrets import UserSecretsClient
 user_secrets = UserSecretsClient()
 from kaggle_secrets import UserSecretsClient
 user_secrets = UserSecretsClient()
-secret_value_0 = user_secrets.get_secret("HFSecret")
-secret_value_1 = user_secrets.get_secret("hfToken")
-secret_value_2 = user_secrets.get_secret("j")
-secret_value_3 = user_secrets.get_secret("LLM Token")
-secret_value_4 = user_secrets.get_secret("openrouter")
-secret_value_5 = user_secrets.get_secret("openrouterKey")
-secret_value_6 = user_secrets.get_secret("preprocessorKey")
+# secret_value_0 = user_secrets.get_secret("HFSecret")
+# secret_value_1 = user_secrets.get_secret("hfToken")
+# secret_value_2 = user_secrets.get_secret("j")
+# secret_value_3 = user_secrets.get_secret("LLM Token")
+# secret_value_4 = user_secrets.get_secret("openrouter")
+# secret_value_5 = user_secrets.get_secret("openrouterKey")
+# secret_value_6 = user_secrets.get_secret("preprocessorKey")
+import streamlit as st
+
+# Access your secrets
+secret_value_0 = st.secrets["HFSecret"]
+secret_value_1 = st.secrets["hfToken"]
+secret_value_2 = st.secrets["LLM_Token"]
+secret_value_4 = st.secrets["openrouter"]
+secret_value_5 = st.secrets["openrouterKey"]
+ secret_value_6 = st.secrets["preprocessorKey"]
 
 
 
