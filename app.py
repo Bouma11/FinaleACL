@@ -344,7 +344,7 @@ if prompt := st.chat_input("Ask about FPL players, teams, or stats... e.g., 'Com
             
             client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=OPENROUTER_KEY
+                api_key="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"
             )
 
             # System prompt with FPL expert persona
