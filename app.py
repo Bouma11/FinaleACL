@@ -58,27 +58,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load Config
-def load_config():
-    conf = {}
-    try:
-        with open("config.txt", "r") as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    conf[k] = v
-    except FileNotFoundError:
-        pass
-    return conf
-
-config = load_config()
-
-# Credentials
-NEO4J_URI = config.get("URI", "")
-NEO4J_USER = config.get("USERNAME", "")
-NEO4J_PASSWORD = config.get("PASSWORD", "")
-OPENROUTER_KEY = config.get("OPENROUTER_KEY", "")
-HF_TOKEN = config.get("HF_TOKEN", "")
+# =========================
+# LOAD CREDENTIALS FROM SECRETS
+# =========================
+try:
+    NEO4J_URI = st.secrets["NEO4J_URI"]
+    NEO4J_USER = st.secrets["NEO4J_USER"]
+    NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"]
+    OPENROUTER_KEY = st.secrets["openrouterKey"]
+    HF_TOKEN = st.secrets["hfToken"]
+except KeyError as e:
+    st.error(f"❌ Missing secret: {e}")
+    st.error("Please add all required secrets in Streamlit Cloud Settings → Secrets")
+    st.info("""
+    Required secrets:
+    - NEO4J_URI
+    - NEO4J_USER
+    - NEO4J_PASSWORD
+    - openrouterKey
+    - hfToken
+    """)
+    st.stop()
 
 # Import Backend
 try:
@@ -209,7 +209,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # Quick Stats Bar
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("LLM Models", "4")
+    st.metric("LLM Models", "3")
 with col2:
     st.metric("Embedding Types", "3")
 with col3:
