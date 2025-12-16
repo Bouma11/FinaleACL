@@ -85,12 +85,22 @@ HF_TOKEN = (
     os.getenv("HF_TOKEN", "")
 ).strip()  # Ensure no extra whitespace
 
-OPENROUTER_KEY = (
+# Load OpenRouter key (try all possible names, with proper quote stripping)
+_openrouter_raw = (
     _config.get("OPENROUTER_KEY") or 
     _config.get("openrouterKey") or 
     _config.get("openrouter") or
     os.getenv("OPENROUTER_KEY", "")
-).strip()  # Ensure no extra whitespace
+)
+
+# Clean the key: strip whitespace and remove quotes
+OPENROUTER_KEY = ""
+if _openrouter_raw:
+    OPENROUTER_KEY = _openrouter_raw.strip()
+    # Remove surrounding quotes if present
+    if (OPENROUTER_KEY.startswith('"') and OPENROUTER_KEY.endswith('"')) or \
+       (OPENROUTER_KEY.startswith("'") and OPENROUTER_KEY.endswith("'")):
+        OPENROUTER_KEY = OPENROUTER_KEY[1:-1].strip()
 
 # ─────────────────────────────────────────────────────────────
 # INITIALIZE RETRIEVER
@@ -121,7 +131,9 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
             _config_reload.get("openrouterKey") or 
             _config_reload.get("openrouter") or
             os.getenv("OPENROUTER_KEY", "")
-        ).strip()
+        )
+        if openrouter_key:
+            openrouter_key = openrouter_key.strip()
     
     if not openrouter_key:
         raise ValueError("OPENROUTER_KEY not found. Please set it in config.txt (as 'openrouterKey' or 'openrouter') or environment variables.")
@@ -130,6 +142,15 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
     openrouter_key = openrouter_key.strip()
     if (openrouter_key.startswith('"') and openrouter_key.endswith('"')) or (openrouter_key.startswith("'") and openrouter_key.endswith("'")):
         openrouter_key = openrouter_key[1:-1].strip()
+    
+    # Validate key format (OpenRouter keys start with sk-or-v1-)
+    if not openrouter_key.startswith("sk-or-v1-") and not openrouter_key.startswith("sk-or-v1"):
+        # Don't fail, but log a warning - some keys might have different formats
+        pass
+    
+    # Debug: Check key length (OpenRouter keys are typically long)
+    if len(openrouter_key) < 20:
+        raise ValueError(f"OpenRouter API key appears to be too short ({len(openrouter_key)} chars). Please verify your key in config.txt")
 
     # 2️⃣ Initialize OpenRouter client
     # OpenRouter requires the API key in the Authorization header
@@ -212,11 +233,18 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
         )
     except Exception as e:
         error_msg = str(e)
-        if "401" in error_msg or "User not found" in error_msg:
+        if "401" in error_msg or "User not found" in error_msg or "authentication" in error_msg.lower():
+            # Don't expose the full key, but show first/last few chars for debugging
+            key_preview = f"{openrouter_key[:10]}...{openrouter_key[-5:]}" if len(openrouter_key) > 15 else "***"
             raise ValueError(
-                f"OpenRouter API authentication failed. Please check your API key in config.txt. "
-                f"Error: {error_msg}. "
-                f"Make sure the key is set as 'openrouterKey' or 'openrouter' in config.txt"
+                f"OpenRouter API authentication failed (401). "
+                f"Key loaded: {key_preview} (length: {len(openrouter_key)}). "
+                f"Please verify:\n"
+                f"1. The API key in config.txt is valid and active\n"
+                f"2. The key starts with 'sk-or-v1-'\n"
+                f"3. Check your OpenRouter account at https://openrouter.ai/keys\n"
+                f"4. Make sure the key is set as 'openrouterKey' or 'openrouter' in config.txt\n"
+                f"Original error: {error_msg}"
             ) from e
         else:
             raise
