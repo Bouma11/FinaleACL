@@ -1,11 +1,129 @@
-"""
-FPL Graph-RAG Streamlit Frontend
-This app uses Task3.py's call_llm function to process user queries
+# ============================================
+# CELL 1: INSTALL DEPENDENCIES
+# ============================================
+
+!pip install streamlit pyngrok -q
+!ngrok authtoken "36ulLRiXuNcPFvvcjBqzMY4fzzD_2YrjyBDEVMznrTiSTi8j"
+
+# ============================================
+# CELL 2: COPY Task3.py FUNCTIONS TO WORKING DIR
+# ============================================
+
+# Since Task3.py code is in another cell in your Kaggle notebook,
+# we need to create a standalone Task3.py file for Streamlit to import
+
+task3_code = """
+from kaggle_secrets import UserSecretsClient
+from neo4j import GraphDatabase
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from typing import Dict, List, Any
+from fpl_Task2 import FPLGraphRetrieval
+from openai import OpenAI
+
+# Get secrets
+user_secrets = UserSecretsClient()
+secret_value_0 = user_secrets.get_secret("openrouterkey")
+secret_value_1 = user_secrets.get_secret("preprocesskey")
+
+# Neo4j Configuration
+NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8"
+
+# Initialize retriever
+retriever = FPLGraphRetrieval(
+    neo4j_uri=NEO4J_URI,
+    neo4j_user=NEO4J_USER,
+    neo4j_password=NEO4J_PASSWORD,
+    hf_token=secret_value_1,
+    use_llm=True
+)
+
+def call_llm(user_question: str, model: str, embedding_type: str = 'numeric'):
+    openrouter_key = secret_value_0
+    
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_key
+    )
+    
+    result = retriever.retrieve(user_question, method="both", embedding_type=embedding_type)
+    context_text = result
+    
+    persona_text = (
+        "You are an FPL (Fantasy Premier League) expert. "
+        "You can answer any questions related to FPL, including player stats, "
+        "team performance, transfers, and gameweek strategies. "
+        "You are also knowledgeable about the Premier League in general."
+    )
+    
+    task_text = (
+        "IMPORTANT: You MUST always provide a response. Never return empty text.\\n\\n"
+        "SPECIAL INSTRUCTIONS FOR COMPARISON QUERIES:\\n"
+        "When the user asks to compare players (e.g., 'compare X and Y'):\\n"
+        "1. First check if BOTH players are mentioned in the CONTEXT\\n"
+        "2. If yes, extract ALL their stats from the CONTEXT\\n"
+        "3. Create a detailed comparison table or bullet points\\n"
+        "4. Include: goals, points, assists, clean sheets (if relevant), bonus points\\n"
+        "5. Provide a clear conclusion about who performed better overall\\n\\n"
+        "CONTEXT:\\n{context}\\n\\n"
+        "QUESTION: {question}\\n\\n"
+        "ANSWER (remember: never leave this blank):"
+    )
+    
+    prompt = f\"\"\"
+    CONTEXT:
+    {context_text}
+
+    PERSONA:
+    {persona_text}
+
+    TASK:
+    {task_text}
+    \"\"\"
+    
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": persona_text},
+            {"role": "user", "content": f"{prompt}\\n\\nQuestion: {user_question}"}
+        ],
+        temperature=0.2,
+        max_tokens=500
+    )
+    
+    answer = completion.choices[0].message.content
+    total_tokens = completion.usage.total_tokens
+    
+    return answer, total_tokens
 """
 
+# Write Task3.py
+with open('Task3.py', 'w') as f:
+    f.write(task3_code)
+
+print("✅ Task3.py created successfully!")
+
+# ============================================
+# CELL 3: CREATE STREAMLIT APP FILE
+# ============================================
+
+app_code = """
 import streamlit as st
 import pandas as pd
-from Task3 import call_llm, retriever
+import sys
+import os
+
+# Add current directory to Python path
+sys.path.insert(0, os.getcwd())
+
+# Import from Task3
+try:
+    from Task3 import call_llm, retriever
+except ImportError as e:
+    st.error(f"❌ Could not import Task3: {e}")
+    st.stop()
 
 # =========================
 # PAGE CONFIG
@@ -17,7 +135,7 @@ st.set_page_config(
 )
 
 # Custom CSS for FPL theme
-st.markdown("""
+st.markdown('''
     <style>
     .manager-header {
         background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
@@ -53,7 +171,7 @@ st.markdown("""
         margin-bottom: 20px;
     }
     </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 # =========================
 # SIDEBAR CONTROLS
@@ -67,11 +185,12 @@ with st.sidebar:
     st.markdown("### 🧠 1. Generation Model")
     st.caption("Select the LLM that generates the final answer.")
     llm_map = {
-        "Mistral 7B": "mistralai/mistral-7b-instruct:free",
-        "Llama 3 70B": "meta-llama/llama-3.3-70b-instruct:free",
         "Devstral": "mistralai/devstral-2512:free",
+        "Llama 3 70B": "meta-llama/llama-3.3-70b-instruct:free",
         "Nemotron 3": "nvidia/nemotron-3-nano-30b-a3b:free"
     }
+
+
     llm_choice = st.selectbox("LLM Model", list(llm_map.keys()), index=0)
     selected_llm_id = llm_map[llm_choice]
 
@@ -91,7 +210,7 @@ with st.sidebar:
     
     # FPL Tips Section
     with st.expander("💡 FPL Assistant Tips"):
-        st.markdown("""
+        st.markdown('''
         **Best Query Examples:**
         - "Compare Haaland vs Salah"
         - "Top defenders for clean sheets"
@@ -102,7 +221,7 @@ with st.sidebar:
         **Pro Tips:**
         - Use **Numeric embeddings** for stat-based similarity
         - Use **Text embeddings** for semantic understanding
-        """)
+        ''')
     
     st.markdown("---")
     
@@ -191,7 +310,7 @@ if prompt := st.chat_input("Ask about FPL players, teams, or stats... e.g., 'Com
             status_container.update(label="❌ Error", state="error")
             error_msg = f"An error occurred: {e}"
             st.error(error_msg)
-            st.info("Try simplifying your query or checking your configuration in config.txt")
+            st.info("Try simplifying your query or checking your configuration")
             
             # Save error to history
             st.session_state.messages.append({"role": "assistant", "content": f"❌ {error_msg}"})
@@ -205,3 +324,41 @@ with col2:
     st.caption("📊 Powered by Neo4j Knowledge Graph")
 with col3:
     st.caption("🤖 Enhanced with LLM + Embeddings")
+"""
+
+# Write the app code to file
+with open('app.py', 'w') as f:
+    f.write(app_code)
+
+print("✅ app.py created successfully!")
+
+# ============================================
+# CELL 4: LAUNCH STREAMLIT WITH NGROK
+# ============================================
+
+import time
+from pyngrok import ngrok
+import os
+
+# Kill any existing Streamlit processes
+os.system('pkill -f streamlit')
+
+# Start Streamlit in the background
+os.system('streamlit run app.py --server.port 8501 &')
+
+# Wait for Streamlit to start
+print("⏳ Starting Streamlit server...")
+time.sleep(8)
+
+# Create ngrok tunnel
+public_url = ngrok.connect(8501)
+
+print("="*60)
+print("🎉 STREAMLIT APP IS LIVE!")
+print("="*60)
+print(f"📱 Access your app at: {public_url}")
+print("="*60)
+print("\n⚠️  IMPORTANT:")
+print("   - Keep this Kaggle notebook running")
+print("   - The URL will stop working if you close this notebook")
+print("="*60)
