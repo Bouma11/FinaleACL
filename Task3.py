@@ -83,14 +83,14 @@ HF_TOKEN = (
     _config.get("HFSecret") or 
     _config.get("LLM_Token") or
     os.getenv("HF_TOKEN", "")
-)
+).strip()  # Ensure no extra whitespace
 
 OPENROUTER_KEY = (
     _config.get("OPENROUTER_KEY") or 
     _config.get("openrouterKey") or 
     _config.get("openrouter") or
     os.getenv("OPENROUTER_KEY", "")
-)
+).strip()  # Ensure no extra whitespace
 
 # ─────────────────────────────────────────────────────────────
 # INITIALIZE RETRIEVER
@@ -111,20 +111,35 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
     Takes user question, handles retrieval with specified embedding type.
     """
 
-    # 1️⃣ Get API key from config
+    # 1️⃣ Get API key from config (try all possible key names)
     openrouter_key = OPENROUTER_KEY
     if not openrouter_key:
         # Try reloading config in case it was updated
         _config_reload = load_config()
-        openrouter_key = _config_reload.get("OPENROUTER_KEY", os.getenv("OPENROUTER_KEY", ""))
+        openrouter_key = (
+            _config_reload.get("OPENROUTER_KEY") or 
+            _config_reload.get("openrouterKey") or 
+            _config_reload.get("openrouter") or
+            os.getenv("OPENROUTER_KEY", "")
+        ).strip()
     
     if not openrouter_key:
-        raise ValueError("OPENROUTER_KEY not found. Please set it in config.txt or environment variables.")
+        raise ValueError("OPENROUTER_KEY not found. Please set it in config.txt (as 'openrouterKey' or 'openrouter') or environment variables.")
+    
+    # Ensure the key is clean (no quotes, no extra whitespace)
+    openrouter_key = openrouter_key.strip()
+    if (openrouter_key.startswith('"') and openrouter_key.endswith('"')) or (openrouter_key.startswith("'") and openrouter_key.endswith("'")):
+        openrouter_key = openrouter_key[1:-1].strip()
 
     # 2️⃣ Initialize OpenRouter client
+    # OpenRouter requires the API key in the Authorization header
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key
+        api_key=openrouter_key,
+        default_headers={
+            "HTTP-Referer": "https://github.com",  # Optional: for tracking
+            "X-Title": "FPL Graph-RAG Assistant"  # Optional: for tracking
+        }
     )
 
     
@@ -185,15 +200,26 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
     """
 
     # 8️⃣ Call the LLM
-    completion = client.chat.completions.create(
-        model= model,
-        messages=[
-            {"role": "system", "content": persona_text},
-            {"role": "user", "content": f"{prompt}\n\nQuestion: {user_question}"}
-        ],
-        temperature=0.2,
-        max_tokens=500
-    )
+    try:
+        completion = client.chat.completions.create(
+            model= model,
+            messages=[
+                {"role": "system", "content": persona_text},
+                {"role": "user", "content": f"{prompt}\n\nQuestion: {user_question}"}
+            ],
+            temperature=0.2,
+            max_tokens=500
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "401" in error_msg or "User not found" in error_msg:
+            raise ValueError(
+                f"OpenRouter API authentication failed. Please check your API key in config.txt. "
+                f"Error: {error_msg}. "
+                f"Make sure the key is set as 'openrouterKey' or 'openrouter' in config.txt"
+            ) from e
+        else:
+            raise
 
     # 9️⃣ Return the LLM answer
 
