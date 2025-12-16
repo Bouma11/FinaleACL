@@ -69,7 +69,7 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
 
     # 1️⃣ Get API key
     user_secrets = UserSecretsClient()
-    openrouter_key = user_secrets.get_secret("openrouterkey")
+    openrouter_key = secret_value_5
 
     # 2️⃣ Initialize OpenRouter client
     client = OpenAI(
