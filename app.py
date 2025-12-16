@@ -74,11 +74,11 @@ def load_config():
 config = load_config()
 
 # Credentials
-NEO4J_URI = config.get("URI", "")
-NEO4J_USER = config.get("USERNAME", "")
-NEO4J_PASSWORD = config.get("PASSWORD", "")
-OPENROUTER_KEY = config.get("OPENROUTER_KEY", "")
-HF_TOKEN = config.get("HF_TOKEN", "")
+NEO4J_URI = st.secrets["NEO4J_URI"]        
+NEO4J_USER = st.secrets["NEO4J_USER"]     
+NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"] 
+OPENROUTER_KEY = st.secrets["openrouterKey"]   
+HF_TOKEN = st.secrets["hfToken"]  
 
 # Import Backend
 try:
