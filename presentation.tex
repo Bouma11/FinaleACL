@@ -276,47 +276,8 @@ def embed(self, text):
 \end{columns}
 \end{frame}
 
-% ============== ERROR ANALYSIS ==============
-\begin{frame}{Error Analysis \& Improvements}
-
-\textbf{Tracked Errors}
-\begin{itemize}
-    \item LLM API failures
-    \item JSON parsing failures
-    \item Bad inputs
-    \item Embedding exceptions
-\end{itemize}
-
-\textbf{Improvements}
-\begin{itemize}
-    \item Automatic fallback
-    \item Input validation
-    \item Type enforcement
-    \item Logging + metrics
-\end{itemize}
-
-\end{frame}
 
 
-
-% ============== LLM LAYER ==============
-\begin{frame}{LLM Layer \& Context Construction}
-
-\textbf{Context Pipeline}
-\begin{itemize}
-    \item Merge Cypher + embedding similarity
-    \item Rank by relevance
-    \item Build structured prompt
-\end{itemize}
-
-\textbf{Models Compared}
-\begin{itemize}
-    \item Llama-2
-    \item Gemma
-    \item Mistral
-\end{itemize}
-
-\end{frame}
 % ============== Nour ==============
 % ============== GRAPH RETRIEVAL LAYER ==============
 \begin{frame}{Graph Retrieval Layer: Architecture}
@@ -928,6 +889,197 @@ Gameweek & 8 & GW difficulty & Analyze volatility \\
 \end{frame}
 
 % ============== elkot==============
+
+
+
+
+
+% ============== LLM LAYER 
+\begin{frame}[plain]
+\vfill
+\begin{center}
+\Huge \textbf{LLM Layer}
+\end{center}
+\vfill
+\end{frame}
+
+\begin{frame}{Merging Results}
+\begin{center}
+\Large \textbf{Merged Context}
+\end{center}
+\vspace{0.2cm}
+\begin{columns}[t]
+\column{0.48\textwidth}
+\begin{center}
+\textbf{Baseline Results}
+\end{center}
+\begin{itemize}
+    \item Cypher queries on Knowledge Graph
+    \item Exact entity matching
+    \item Structured data retrieval
+\end{itemize}
+\column{0.48\textwidth}
+\begin{center}
+\textbf{Embedding Results}
+\end{center}
+\begin{itemize}
+    \item Semantic similarity search
+    \item Vector-based matching
+    \item Contextual relevance
+\end{itemize}
+\end{columns}
+\vspace{0.8cm}
+\begin{center}
+\textbf{Merging Strategy}
+\end{center}
+\begin{itemize}
+    \setlength\itemsep{0.8em}
+    \item Append embedding results on baseline results giving priority to baseline
+    \item Remove duplicates based on player identity
+    \item Preserve unique entries from each source
+\end{itemize}
+\end{frame}
+% ===================================================================
+
+
+
+
+\begin{frame}{LLM \& Prompt Engineering}
+\textbf{Model Selection}
+\begin{itemize}
+    \item  {Mistral Devstral-2512} 
+    \item {Meta Llama-3.3-70B Instruct}
+    \item {NVIDIA Nemotron-3-Nano-30B}
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Prompt Structure}
+\begin{itemize}
+    \item \textbf{Context:} Merged Results
+    \item \textbf{Persona:} FPL expert with Premier League knowledge
+    \item \textbf{Task Instructions:} Query-type specific guidelines
+    \begin{itemize}
+        \item Detailed tables
+        \item Numbered lists with stats
+        \item Complete statistics
+    \end{itemize}
+\end{itemize}
+
+
+\end{frame}
+
+% ===================================================================
+
+\begin{frame}{Model Evaluation}
+\textbf{Two-Tier Evaluation Strategy}
+
+\vspace{0.2cm}
+\textbf{1. Automated Metric Evaluation}
+\begin{itemize}
+    \item \textbf{Accuracy:} Entity extraction + number matching
+    \begin{itemize}
+        \item Entity F1 score (precision \& recall)
+        \item Number matching accuracy
+        \item Combined score: 70\% entities + 30\% numbers
+    \end{itemize}
+    \item \textbf{Efficiency:} Response time \& token usage
+    \item \textbf{Ground Truth Comparison:} 12 test queries
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{2. Human Evaluation}
+\begin{itemize}
+    \item \textbf{Qualitative Metrics:} (1-5 scale)
+    \begin{itemize}
+        \item Relevance, Correctness, Naturalness
+        \item Completeness, Overall Quality
+    \end{itemize}
+    \item \textbf{Comparison:} Side-by-side model outputs
+    \item \textbf{Comments:} Optional feedback per query
+\end{itemize}
+\end{frame}
+
+% ===================================================================
+
+\begin{frame}{Evaluation Results}
+\begin{columns}[t]
+\column{0.48\textwidth}
+\textbf{Human Evaluation Results}
+\begin{table}[h]
+\tiny
+\begin{tabular}{lcccc}
+\hline
+\textbf{Metric} & \textbf{Devstral} & \textbf{Llama} & \textbf{Nemotron} \\
+\hline
+Relevance & 4.58 & \textbf{4.58} & 4.00 \\
+Correctness & 3.67 & \textbf{3.75} & 3.42 \\
+Naturalness & 3.83 & \textbf{4.17} & 3.50 \\
+Completeness & 4.17 & \textbf{4.25} & 3.75 \\
+\textbf{Overall} & 4.25 & \textbf{4.50} & 3.83 \\
+\hline
+\end{tabular}
+\end{table}
+
+\column{0.48\textwidth}
+\textbf{Automated Metrics}
+\begin{table}[h]
+\tiny
+\begin{tabular}{lccc}
+\hline
+\textbf{Metric} & \textbf{Devstral} & \textbf{Llama} & \textbf{Nemotron} \\
+\hline
+Correct (\%) & 75.0 & \textbf{75.0} & 58.3 \\
+Accuracy & 67.7\% & \textbf{71.7\%} & 54.5\% \\
+Time (s) & 6.91 & 19.99 & \textbf{2.83} \\
+Tokens & 2504 & \textbf{2029} & 2534 \\
+\hline
+\end{tabular}
+\end{table}
+\end{columns}
+
+\vspace{0.3cm}
+\begin{block}{   Best Performers}
+\small
+\begin{itemize}
+    \item \textbf{Overall Winner:} Llama 3.3 70B (4.50/5.00 human score)
+    \item \textbf{Best Accuracy:} Llama 3.3 70B (71.7\%, 9/12 correct)
+    \item \textbf{Fastest:} Nemotron Nano 30B (2.83s avg)
+    \item \textbf{Most Efficient:} Llama 3.3 70B (2029 tokens avg)
+\end{itemize}
+\end{block}
+\end{frame}
+
+
+
+
+% ============== ERROR ANALYSIS ==============
+\begin{frame}{Error Analysis \& Improvements}
+
+\textbf{Tracked Errors}
+\begin{itemize}
+    \item LLM API failures
+    \item JSON parsing failures
+    \item Bad inputs
+    \item Embedding exceptions
+\end{itemize}
+
+\textbf{Improvements}
+\begin{itemize}
+    \item Automatic fallback
+    \item Input validation
+    \item Type enforcement
+    \item Logging + metrics
+\end{itemize}
+
+\end{frame}
+
+
+
+
+
+
+
+
 
 
 % ============== youssef sameh ==============
