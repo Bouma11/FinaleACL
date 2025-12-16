@@ -1,10 +1,14 @@
+"""
+FPL Graph-RAG Streamlit Frontend
+This app uses Task3.py's call_llm function to process user queries
+"""
+
 import streamlit as st
 import pandas as pd
-from openai import OpenAI
-import time
+from Task3 import call_llm, retriever
 
 # =========================
-# CONFIG & SETUP
+# PAGE CONFIG
 # =========================
 st.set_page_config(
     page_title="FPL Graph-RAG Assistant",
@@ -31,13 +35,6 @@ st.markdown("""
         margin: 15px 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .metric-card {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        margin: 10px 0;
-    }
     .stButton button {
         background: linear-gradient(90deg, #FF6B6B 0%, #FF8E53 100%);
         color: white;
@@ -58,69 +55,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load Config
-def load_config():
-    conf = {}
-    try:
-        with open("config.txt", "r") as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    conf[k] = v
-    except FileNotFoundError:
-        pass
-    return conf
-
-config = load_config()
-
-# Credentials
-NEO4J_URI = st.secrets["NEO4J_URI"]        
-NEO4J_USER = st.secrets["NEO4J_USER"]     
-NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"] 
-OPENROUTER_KEY = st.secrets["openrouterKey"]   
-HF_TOKEN = st.secrets["hfToken"]  
-
-# Import Backend
-try:
-    from fpl_Task2 import FPLGraphRetrieval
-except ImportError:
-    st.error("❌ Missing fpl_Task2.py. Please make sure the file exists.")
-    st.stop()
-
-# =========================
-# CACHED RESOURCE LOADING
-# =========================
-@st.cache_resource(show_spinner=False)
-def get_retriever_cached(uri, user, password, token):
-    """
-    Initializes the FPL Graph Retriever.
-    Cached so model downloading (MiniLM/MPNet) happens only once.
-    """
-    print("🔄 Initializing Retriever (This happens once)...")
-    return FPLGraphRetrieval(
-        uri,
-        user,
-        password,
-        hf_token=token,
-        use_llm=True  # Enabled to show full integration capabilities
-    )
-
-def get_retriever():
-    """Wrapper to handle loading UI feedback."""
-    if "retriever" not in st.session_state or st.session_state.retriever is None:
-        try:
-            with st.spinner("🚀 Booting up System: Loading Embedding Models & Knowledge Graph... (Takes 30s first time)"):
-                st.session_state.retriever = get_retriever_cached(
-                    NEO4J_URI,
-                    NEO4J_USER,
-                    NEO4J_PASSWORD,
-                    HF_TOKEN
-                )
-        except Exception as e:
-            st.error(f"Failed to initialize retriever: {e}")
-            st.stop()
-    return st.session_state.retriever
-
 # =========================
 # SIDEBAR CONTROLS
 # =========================
@@ -133,9 +67,10 @@ with st.sidebar:
     st.markdown("### 🧠 1. Generation Model")
     st.caption("Select the LLM that generates the final answer.")
     llm_map = {
-        "Llama 3.3 70B": "meta-llama/llama-3.3-70b-instruct:free",
-        "Devstral 2512": "mistralai/devstral-2512:free",
-        "Nemotron Nano 30B": "nvidia/nemotron-3-nano-30b-a3b:free"
+        "Mistral 7B": "mistralai/mistral-7b-instruct:free",
+        "Llama 3 70B": "meta-llama/llama-3.3-70b-instruct:free",
+        "Devstral": "mistralai/devstral-2512:free",
+        "Nemotron 3": "nvidia/nemotron-3-nano-30b-a3b:free"
     }
     llm_choice = st.selectbox("LLM Model", list(llm_map.keys()), index=0)
     selected_llm_id = llm_map[llm_choice]
@@ -153,18 +88,6 @@ with st.sidebar:
     selected_emb_type = embedding_map[emb_choice]
 
     st.markdown("---")
-
-    st.markdown("### 🔎 3. Retrieval Strategy")
-    retrieval_mode = st.radio(
-        "Search Method:",
-        ["Baseline (Cypher Only)", "GraphRAG (Hybrid + Embeddings)"],
-        index=1,
-        help="Baseline: Exact database matches. GraphRAG: Combines exact matches with similar players."
-    )
-    
-    method_param = "both" if "GraphRAG" in retrieval_mode else "baseline"
-    
-    st.markdown("---")
     
     # FPL Tips Section
     with st.expander("💡 FPL Assistant Tips"):
@@ -177,10 +100,8 @@ with st.sidebar:
         - "Manchester City upcoming fixtures"
         
         **Pro Tips:**
-        - Use **GraphRAG** for finding similar players
-        - Use **Baseline** for exact stats lookups
-        - **Numeric embeddings** for stat-based similarity
-        - **Text embeddings** for semantic understanding
+        - Use **Numeric embeddings** for stat-based similarity
+        - Use **Text embeddings** for semantic understanding
         """)
     
     st.markdown("---")
@@ -203,7 +124,7 @@ with st.sidebar:
 st.markdown('<div class="manager-header">', unsafe_allow_html=True)
 st.title("⚽ FPL Graph-RAG System")
 st.markdown("### 👋 Welcome, Manager! Your AI Assistant for Fantasy Premier League Decisions")
-st.caption(f"*Current Pipeline:* **{llm_choice}** → **{emb_choice}** → **{retrieval_mode}**")
+st.caption(f"*Current Pipeline:* **{llm_choice}** → **{emb_choice}**")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Quick Stats Bar
@@ -213,9 +134,9 @@ with col1:
 with col2:
     st.metric("Embedding Types", "3")
 with col3:
-    st.metric("Query Templates", "12+")
-with col4:
     st.metric("Knowledge Graph", "Active")
+with col4:
+    st.metric("Retrieval Method", "GraphRAG")
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -230,7 +151,7 @@ for msg in st.session_state.messages:
 
 # Input handling
 if prompt := st.chat_input("Ask about FPL players, teams, or stats... e.g., 'Compare Haaland and Salah'"):
-
+    
     # User message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -242,158 +163,38 @@ if prompt := st.chat_input("Ask about FPL players, teams, or stats... e.g., 'Com
         status_container = st.status("🏗 Processing Pipeline...", expanded=True)
         
         try:
-            # 1. LOAD RETRIEVER
-            retriever = get_retriever()
+            status_container.write(f"🤖 Using Model: **{llm_choice}**")
+            status_container.write(f"📐 Using Embeddings: **{emb_choice}**")
+            status_container.write("🔍 Retrieving data from Knowledge Graph...")
             
-            # 2. SET EMBEDDING MODEL (Dynamic Switching)
-            # Determine embedding type and set accordingly
-            if selected_emb_type == "numeric":
-                embedding_type_param = "numeric"
-                status_container.write("✅ Using **Numeric Embeddings** (statistical similarity based on FPL stats)")
-            elif selected_emb_type == "minilm":
-                embedding_type_param = "minilm"
-                retriever.active_model = 'model_1'
-                status_container.write("✅ Using **MiniLM Text Embeddings** (384 dimensions, good balance)")
-            elif selected_emb_type == "mpnet":
-                embedding_type_param = "mpnet"
-                retriever.active_model = 'model_2'
-                status_container.write("✅ Using **MPNet Text Embeddings** (768 dimensions, most accurate)")
-            
-            # 3. PREPROCESSING & INTENT RECOGNITION
-            status_container.write("🧠 Analyzing Intent & Extracting Entities...")
-            preprocessed = retriever.preprocessor.preprocess(prompt, include_embedding=False)
-            
-            # Visualize detected entities
-            intent = preprocessed.get('intent', 'unknown')
-            entities = preprocessed.get('entities', {})
-            
-            # Show formatted metrics in the status
-            col1, col2 = status_container.columns(2)
-            with col1:
-                st.metric("Detected Intent", intent.replace("_", " ").title())
-                st.metric("Confidence", f"{preprocessed.get('intent_confidence', 0)*100:.0f}%")
-            
-            with col2:
-                if entities:
-                    st.write("📋 Extracted Entities:")
-                    for key, values in entities.items():
-                        if values:
-                            st.caption(f"**{key}:** {', '.join(map(str, values[:3]))}")
-            
-            # 4. RETRIEVAL EXECUTION
-            status_container.write(f"🔍 Retrieving Data using **{retrieval_mode}**...")
-            result = retriever.retrieve(
-                prompt, 
-                method=method_param,
-                embedding_type=embedding_type_param
-            )
-            
-            # Extract data for visualization
-            baseline_res = result.get('baseline', {}).get('results', [])
-            embedding_res = result.get('embedding', {}).get('results', [])
-            combined_res = result.get('combined', [])
-            
-            # Pick the best context source based on mode
-            final_context = combined_res if method_param == "both" else baseline_res
-            
-            # 5. VISUALIZE RETRIEVED DATA
-            if final_context:
-                df_context = pd.DataFrame(final_context)
-                status_container.write(f"📚 Retrieved **{len(final_context)}** relevant records:")
-                
-                # Show stats in a nice format
-                st.markdown('<div class="fpl-stats">', unsafe_allow_html=True)
-                st.dataframe(df_context.head(5), use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Show some key metrics if available
-                if 'total_points' in df_context.columns:
-                    top_player = df_context.iloc[0] if len(df_context) > 0 else None
-                    if top_player is not None:
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Top Points", f"{top_player.get('total_points', 0):.0f}")
-                        with col2:
-                            st.metric("Top Goals", f"{top_player.get('goals', 0):.0f}")
-                        with col3:
-                            st.metric("Top Assists", f"{top_player.get('assists', 0):.0f}")
-            else:
-                status_container.warning("⚠ No direct data found in Knowledge Graph.")
-            
-            # Show retrieval method breakdown
-            if method_param == "both":
-                status_container.write(f"📊 **Retrieval Breakdown:**")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Baseline Results", len(baseline_res))
-                with col2:
-                    st.metric("Embedding Results", len(embedding_res))
-                with col3:
-                    st.metric("Combined", len(combined_res))
-            
-            # Show Cypher query if available
-            cypher_query = result.get('baseline', {}).get('cypher', None)
-            if cypher_query:
-                with st.expander("🔍 View Cypher Query"):
-                    st.code(cypher_query, language="cypher")
-            
-            status_container.update(label="✅ Pipeline Complete", state="complete", expanded=False)
-
-            # 6. GENERATION (LLM)
-            context_str = str(final_context)[:4000]  # Truncate to avoid context limit
-            
-            client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key="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"
-            )
-
-            # System prompt with FPL expert persona
-            system_prompt = f"""You are an expert Fantasy Premier League (FPL) assistant. 
-You have access to FPL statistics and data. Use the provided context to answer the user's question accurately.
-
-CONTEXT DATA:
-{context_str}
-
-IMPORTANT GUIDELINES:
-1. Always provide a response - never return empty text
-2. Cite specific stats from the context when available
-3. For comparisons, create clear tables or bullet points
-4. For recommendations, explain your reasoning
-5. Keep responses concise but informative
-6. Use FPL terminology appropriately
-
-USER QUESTION:
-{prompt}
-
-ANSWER (remember to always provide a helpful response):"""
-
-            # Stream response
-            stream = client.chat.completions.create(
+            # Call the LLM function from Task3.py
+            answer, tokens_used = call_llm(
+                user_question=prompt,
                 model=selected_llm_id,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
-                ],
-                stream=True,
-                temperature=0.3,
-                max_tokens=800
+                embedding_type=selected_emb_type
             )
             
-            response = st.write_stream(stream)
+            status_container.write(f"✅ Generated response ({tokens_used} tokens used)")
+            status_container.update(label="✅ Pipeline Complete", state="complete", expanded=False)
+            
+            # Display the answer
+            st.markdown(answer)
+            
+            # Show token usage
+            with st.expander("📊 Token Usage"):
+                st.metric("Total Tokens", tokens_used)
             
             # Save to history
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.session_state.messages.append({"role": "assistant", "content": answer})
 
         except Exception as e:
             status_container.update(label="❌ Error", state="error")
-            st.error(f"An error occurred: {e}")
-            st.info("Try simplifying your query or checking your configuration.")
+            error_msg = f"An error occurred: {e}"
+            st.error(error_msg)
+            st.info("Try simplifying your query or checking your configuration in config.txt")
+            
+            # Save error to history
+            st.session_state.messages.append({"role": "assistant", "content": f"❌ {error_msg}"})
 
 # Footer
 st.markdown("---")
