@@ -1,35 +1,17 @@
-# ─────────────────────────────────────────────────────────────
-# CONFIGURATION LOADING FROM config.txt
-# ─────────────────────────────────────────────────────────────
-# This file reads all secrets and configuration from config.txt
-# Expected keys in config.txt (supports multiple naming conventions):
-#   - Neo4j: URI or NEO4J_URI, USERNAME or NEO4J_USER, PASSWORD or NEO4J_PASSWORD
-#   - HuggingFace: HF_TOKEN or hfToken or HFSecret or LLM_Token
-#   - OpenRouter: OPENROUTER_KEY or openrouterKey or openrouter
-# ─────────────────────────────────────────────────────────────
-import os
+from kaggle_secrets import UserSecretsClient
+user_secrets = UserSecretsClient()
+from kaggle_secrets import UserSecretsClient
+user_secrets = UserSecretsClient()
+secret_value_0 = user_secrets.get_secret("preprocesskey")
+secret_value_1 = user_secrets.get_secret("preprocesskey")
+# secret_value_2 = user_secrets.get_secret("j")
+# secret_value_3 = user_secrets.get_secret("LLM Token")
+secret_value_4 = user_secrets.get_secret("openrouterkey")
+secret_value_5 = user_secrets.get_secret("openrouterkey")
+secret_value_6 = user_secrets.get_secret("preprocesskey")
 
-def load_config():
-    """Load all configuration from config.txt file"""
-    config = {}
-    try:
-        with open("config.txt", "r") as f:
-            for line in f:
-                line = line.strip()
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    # Strip whitespace and remove surrounding quotes if present
-                    value = v.strip()
-                    # Remove quotes if the value is wrapped in them
-                    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
-                        value = value[1:-1]
-                    config[k.strip()] = value
-    except FileNotFoundError:
-        print("⚠️  config.txt not found. Using environment variables or defaults.")
-    return config
 
-# Load configuration
-_config = load_config()
+
 
 # ─────────────────────────────────────────────────────────────
 # REQUIRED PACKAGES (install if needed)
@@ -43,124 +25,47 @@ from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import Dict, List, Any
-from openai import OpenAI
 
 # Import the main class
 from fpl_Task2 import FPLGraphRetrieval
 
 # ─────────────────────────────────────────────────────────────
-# NEO4J CONFIGURATION (supports multiple naming conventions)
+# NEO4J CONFIGURATION
 # ─────────────────────────────────────────────────────────────
-NEO4J_URI = (
-    _config.get("URI") or 
-    _config.get("NEO4J_URI") or 
-    os.getenv("NEO4J_URI", "neo4j+s://1da86c19.databases.neo4j.io")
-).strip()  # Ensure no extra whitespace
-
-NEO4J_USER = (
-    _config.get("USERNAME") or 
-    _config.get("NEO4J_USER") or 
-    os.getenv("NEO4J_USER", "neo4j")
-).strip()  # Ensure no extra whitespace
-
-NEO4J_PASSWORD = (
-    _config.get("PASSWORD") or 
-    _config.get("NEO4J_PASSWORD") or 
-    os.getenv("NEO4J_PASSWORD", "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8")
-).strip()  # Ensure no extra whitespace
-
-# Validate URI format
-if not NEO4J_URI.startswith(("neo4j://", "neo4j+s://", "bolt://", "bolt+s://")):
-    raise ValueError(f"Invalid Neo4j URI format: {NEO4J_URI}. Must start with neo4j://, neo4j+s://, bolt://, or bolt+s://")
+NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8"
 
 # ─────────────────────────────────────────────────────────────
-# API KEYS FROM CONFIG (supports multiple naming conventions)
+# USAGE
 # ─────────────────────────────────────────────────────────────
-# Try multiple possible key names from config.txt
-HF_TOKEN = (
-    _config.get("HF_TOKEN") or 
-    _config.get("hfToken") or 
-    _config.get("HFSecret") or 
-    _config.get("LLM_Token") or
-    os.getenv("HF_TOKEN", "")
-).strip()  # Ensure no extra whitespace
-
-# Load OpenRouter key (try all possible names, with proper quote stripping)
-_openrouter_raw = (
-    _config.get("OPENROUTER_KEY") or 
-    _config.get("openrouterKey") or 
-    _config.get("openrouter") or
-    os.getenv("OPENROUTER_KEY", "")
-)
-
-# Clean the key: strip whitespace and remove quotes
-OPENROUTER_KEY = ""
-if _openrouter_raw:
-    OPENROUTER_KEY = _openrouter_raw.strip()
-    # Remove surrounding quotes if present
-    if (OPENROUTER_KEY.startswith('"') and OPENROUTER_KEY.endswith('"')) or \
-       (OPENROUTER_KEY.startswith("'") and OPENROUTER_KEY.endswith("'")):
-        OPENROUTER_KEY = OPENROUTER_KEY[1:-1].strip()
-
-# ─────────────────────────────────────────────────────────────
-# INITIALIZE RETRIEVER
-# ─────────────────────────────────────────────────────────────
+# Initialize
 retriever = FPLGraphRetrieval(
     neo4j_uri=NEO4J_URI,
     neo4j_user=NEO4J_USER,
     neo4j_password=NEO4J_PASSWORD,
-    hf_token=HF_TOKEN if HF_TOKEN else None,  # Optional, for LLM mode
-    use_llm=True if HF_TOKEN else False  # Set True to use LLM for entity extraction
+    hf_token=secret_value_1,  # Optional, for LLM mode
+    use_llm=True  # Set True to use LLM for entity extraction
 )
 
-# ─────────────────────────────────────────────────────────────
-# LLM FUNCTION
-# ─────────────────────────────────────────────────────────────
+
+
+
+from openai import OpenAI
+from kaggle_secrets import UserSecretsClient
 def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') -> str:
     """
     Takes user question, handles retrieval with specified embedding type.
     """
 
-    # 1️⃣ Get API key from config (try all possible key names)
-    openrouter_key = OPENROUTER_KEY
-    if not openrouter_key:
-        # Try reloading config in case it was updated
-        _config_reload = load_config()
-        openrouter_key = (
-            _config_reload.get("OPENROUTER_KEY") or 
-            _config_reload.get("openrouterKey") or 
-            _config_reload.get("openrouter") or
-            os.getenv("OPENROUTER_KEY", "")
-        )
-        if openrouter_key:
-            openrouter_key = openrouter_key.strip()
-    
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_KEY not found. Please set it in config.txt (as 'openrouterKey' or 'openrouter') or environment variables.")
-    
-    # Ensure the key is clean (no quotes, no extra whitespace)
-    openrouter_key = openrouter_key.strip()
-    if (openrouter_key.startswith('"') and openrouter_key.endswith('"')) or (openrouter_key.startswith("'") and openrouter_key.endswith("'")):
-        openrouter_key = openrouter_key[1:-1].strip()
-    
-    # Validate key format (OpenRouter keys start with sk-or-v1-)
-    if not openrouter_key.startswith("sk-or-v1-") and not openrouter_key.startswith("sk-or-v1"):
-        # Don't fail, but log a warning - some keys might have different formats
-        pass
-    
-    # Debug: Check key length (OpenRouter keys are typically long)
-    if len(openrouter_key) < 20:
-        raise ValueError(f"OpenRouter API key appears to be too short ({len(openrouter_key)} chars). Please verify your key in config.txt")
+    # 1️⃣ Get API key
+    user_secrets = UserSecretsClient()
+    openrouter_key = user_secrets.get_secret("openrouterkey")
 
     # 2️⃣ Initialize OpenRouter client
-    # OpenRouter requires the API key in the Authorization header
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key,
-        default_headers={
-            "HTTP-Referer": "https://github.com",  # Optional: for tracking
-            "X-Title": "FPL Graph-RAG Assistant"  # Optional: for tracking
-        }
+        api_key=openrouter_key
     )
 
     
@@ -189,23 +94,67 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
     task_text = (
     "IMPORTANT: You MUST always provide a response. Never return empty text.\n\n"
     
-    "SPECIAL INSTRUCTIONS FOR COMPARISON QUERIES:\n"
-    "When the user asks to compare players (e.g., 'compare X and Y'):\n"
-    "1. First check if BOTH players are mentioned in the CONTEXT\n"
-    "2. If yes, extract ALL their stats from the CONTEXT\n"
-    "3. Create a detailed comparison table or bullet points\n"
-    "4. Include: goals, points, assists, clean sheets (if relevant), bonus points\n"
-    "5. Provide a clear conclusion about who performed better overall\n\n"
+    "=== QUERY TYPE INSTRUCTIONS ===\n\n"
     
-    "EXAMPLE FORMAT for player comparisons:\n"
-    "Comparison: Player A vs Player B\n"
-    "• Player A: X goals, Y points, Z assists, W bonus points\n"
-    "• Player B: A goals, B points, C assists, D bonus points\n"
-    "Conclusion: [Who was better and why]\n\n"
+    "1. COMPARISON QUERIES (e.g., 'compare X and Y'):\n"
+    "   • First check if BOTH players are mentioned in the CONTEXT\n"
+    "   • Extract ALL their stats from the CONTEXT\n"
+    "   • Create a detailed comparison table or bullet points\n"
+    "   • Include: goals, points, assists, clean sheets, bonus points\n"
+    "   • Provide a clear conclusion about who performed better\n"
+    "   EXAMPLE:\n"
+    "   Comparison: Player A vs Player B\n"
+    "   • Player A: X goals, Y points, Z assists, W bonus\n"
+    "   • Player B: A goals, B points, C assists, D bonus\n"
+    "   Conclusion: [Who was better and why]\n\n"
     
-    "CONTEXT:\n{context}\n\n"
-    "QUESTION: {question}\n\n"
-    "ANSWER (remember: never leave this blank):"
+    "2. TOP/RANKING QUERIES (e.g., 'top 10 scorers', 'best defenders'):\n"
+    "   • Extract the exact ranking from the CONTEXT\n"
+    "   • List players in numbered order (1, 2, 3...)\n"
+    "   • Include key stats: goals/points/assists next to each name\n"
+    "   • Format: '1. Player Name - X goals, Y points'\n"
+    "   • If asking for top N, provide EXACTLY N players\n\n"
+    
+    "3. PLAYER SUMMARY QUERIES (e.g., 'how did X perform', 'X's stats'):\n"
+    "   • Extract ALL available stats for that player from CONTEXT\n"
+    "   • Include: total points, goals, assists, minutes, clean sheets, bonus, cards\n"
+    "   • Present in bullet format or table\n"
+    "   • Add brief analysis if stats are exceptional\n\n"
+    
+    "4. TEAM/FIXTURE QUERIES (e.g., 'team fixtures', 'upcoming matches'):\n"
+    "   • List fixtures chronologically by gameweek\n"
+    "   • Format: 'GW X: Home Team vs Away Team (Date)'\n"
+    "   • Include scores if available in CONTEXT\n"
+    "   • Group by team if querying specific team\n\n"
+    
+    "5. GAMEWEEK PERFORMANCE QUERIES (e.g., 'GW 20 performance'):\n"
+    "   • Focus on specific gameweek data from CONTEXT\n"
+    "   • Include: points scored, goals, assists, minutes played\n"
+    "   • Mention opponent if available\n"
+    "   • Note if player didn't play (0 minutes)\n\n"
+    
+    "6. LIST QUERIES (e.g., 'players on Manchester City'):\n"
+    "   • Provide complete list from CONTEXT\n"
+    "   • Group by position if relevant (GK, DEF, MID, FWD)\n"
+    "   • Use bullet points or numbered list\n"
+    "   • Include position labels\n\n"
+    
+    "7. STATISTICAL QUERIES (e.g., 'most cards', 'clean sheet leaders'):\n"
+    "   • Focus on the specific statistic asked\n"
+    "   • Rank players by that stat\n"
+    "   • Show the actual numbers clearly\n"
+    "   • Format: 'Player Name: X [stat]'\n\n"
+    
+    "=== GENERAL RULES ===\n"
+    "• ALWAYS extract data from CONTEXT - never make up stats\n"
+    "• If data is not in CONTEXT, say 'Information not available in context'\n"
+    "• Use clear formatting: bullet points, numbering, or tables\n"
+    "• Include units (points, goals, assists) with numbers\n"
+    "• Be concise but complete - include all relevant data\n"
+    "• For numerical data, preserve exact values from CONTEXT\n"
+    "• If multiple entries exist (e.g., player played multiple GWs), show all\n\n"
+
+    
     )
 
     # 7️⃣ Build the prompt
@@ -221,33 +170,15 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
     """
 
     # 8️⃣ Call the LLM
-    try:
-        completion = client.chat.completions.create(
-            model= model,
-            messages=[
-                {"role": "system", "content": persona_text},
-                {"role": "user", "content": f"{prompt}\n\nQuestion: {user_question}"}
-            ],
-            temperature=0.2,
-            max_tokens=500
-        )
-    except Exception as e:
-        error_msg = str(e)
-        if "401" in error_msg or "User not found" in error_msg or "authentication" in error_msg.lower():
-            # Don't expose the full key, but show first/last few chars for debugging
-            key_preview = f"{openrouter_key[:10]}...{openrouter_key[-5:]}" if len(openrouter_key) > 15 else "***"
-            raise ValueError(
-                f"OpenRouter API authentication failed (401). "
-                f"Key loaded: {key_preview} (length: {len(openrouter_key)}). "
-                f"Please verify:\n"
-                f"1. The API key in config.txt is valid and active\n"
-                f"2. The key starts with 'sk-or-v1-'\n"
-                f"3. Check your OpenRouter account at https://openrouter.ai/keys\n"
-                f"4. Make sure the key is set as 'openrouterKey' or 'openrouter' in config.txt\n"
-                f"Original error: {error_msg}"
-            ) from e
-        else:
-            raise
+    completion = client.chat.completions.create(
+        model= model,
+        messages=[
+            {"role": "system", "content": persona_text},
+            {"role": "user", "content": f"{prompt}\n\nQuestion: {user_question}"}
+        ],
+        temperature=0.2,
+        max_tokens=500
+    )
 
     # 9️⃣ Return the LLM answer
 
@@ -263,6 +194,8 @@ def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') ->
 
 
     return completion.choices[0].message.content, total_tokens
+
+
 
 
 
@@ -293,23 +226,223 @@ def compare_models_human_evaluation():
     # =========================================================================
     
     models_dict = {
-        "1": "mistralai/mistral-7b-instruct:free",
-        "2": "meta-llama/llama-3.3-70b-instruct:free",
-        "3": "mistralai/devstral-2512:free",
+        "1": "mistralai/devstral-2512:free",
+        "2":  "meta-llama/llama-3.3-70b-instruct:free",
+        "3": "nvidia/nemotron-3-nano-30b-a3b:free",
     }
     
     test_queries = [
         {
-            "question": "Who is the best FPL player this season?", 
-            "ground_truth": "Erling Haaland"
+            "question": "Who are the top 10 forwards in the 2022-23 season?",
+            "ground_truth": """
+Erling Haaland,272
+Harry Kane,263
+Ivan Toney,182
+Ollie Watkins,175
+Callum Wilson,157
+Bryan Mbeumo,150
+Dominic Solanke,130
+Gabriel Fernando de Jesus,125
+Brennan Johnson,122
+Aleksandar Mitrović,107"""
         },
         {
-            "question": "Which midfielder has the most assists?",
-            "ground_truth": "Kevin De Bruyne"
+            "question": "How did Erling Haaland perform in gameweek 20 of the 2022-23 season?",
+            "ground_truth": """
+Erling Haaland,points 2,goals 0,assists 0,minutes 90
+Erling Haaland,points 6,goals 1, assists 0,minutes 89"""
         },
         {
-            "question": "Who are the top 3 defenders by points?",
-            "ground_truth": "Reece James, Trent Alexander-Arnold, Joao Cancelo"
+            "question": "Compare Erling Haaland and Harry Kane's performance in the 2022-23 season",
+            "ground_truth": """player,total_points,goals,assists
+Erling Haaland,total_points 272,goals 36,assists 9
+Harry Kane,total_points 263,goals 30,assists 9"""
+        },
+        {
+            "question": "What were Manchester City's fixtures in the 2022-23 season?",
+            "ground_truth": """
+1,West Ham,Man City,2022-08-07 15:30:00+00:00
+3,Newcastle,Man City,2022-08-21 15:30:00+00:00
+6,Aston Villa,Man City,2022-09-03 16:30:00+00:00
+8,Wolves,Man City,2022-09-17 11:30:00+00:00
+11,Liverpool,Man City,2022-10-16 15:30:00+00:00
+14,Leicester,Man City,2022-10-29 11:30:00+00:00
+17,Leeds,Man City,2022-12-28 20:00:00+00:00
+19,Chelsea,Man City,2023-01-05 20:00:00+00:00
+20,Man Utd,Man City,2023-01-14 12:30:00+00:00
+22,Spurs,Man City,2023-02-05 16:30:00+00:00
+23,Arsenal,Man City,2023-02-15 19:30:00+00:00
+24,Nott'm Forest,Man City,2023-02-18 15:00:00+00:00
+25,Bournemouth,Man City,2023-02-25 17:30:00+00:00
+27,Crystal Palace,Man City,2023-03-11 17:30:00+00:00
+30,Southampton,Man City,2023-04-08 16:30:00+00:00
+34,Fulham,Man City,2023-04-30 13:00:00+00:00
+36,Everton,Man City,2023-05-14 13:00:00+00:00
+37,Brighton,Man City,2023-05-24 19:00:00+00:00
+38,Brentford,Man City,2023-05-28 15:30:00+00:00"""
+        },
+        {
+            "question": "Which players are on Manchester City?",
+            "ground_truth": """
+player,position
+Alex Robertson,MID
+Aymeric Laporte,DEF
+Aymeric Laporte,DEF
+Ben Knight,MID
+Benjamin Mendy,DEF
+Bernardo Mota Veiga de Carvalho e Silva,MID
+Bernardo Veiga de Carvalho e Silva,MID
+Cieran Slicker,GK
+Claudio Gomes,MID
+Cole Palmer,MID
+Cole Palmer,MID
+Conrad Egan-Riley,DEF
+Ederson Santana de Moraes,GK
+Ederson Santana de Moraes,GK
+Erling Haaland,FWD
+Fernando Luiz Rosa,MID
+Ferran Torres,MID
+Gabriel Fernando de Jesus,FWD
+Ilkay Gündogan,MID
+Ilkay Gündogan,MID
+Jack Grealish,MID
+Jack Grealish,MID
+James McAtee,MID
+James McAtee,MID
+John Stones,DEF
+John Stones,FWD
+John Stones,DEF
+Josh Wilson-Esbrand,DEF
+Joshua Wilson-Esbrand,DEF
+João Cancelo,DEF
+João Pedro Cavaco Cancelo,DEF
+Julián Álvarez,FWD
+Kalvin Phillips,MID
+Kayky da Silva Chagas,FWD
+Kevin De Bruyne,MID
+Kevin De Bruyne,MID
+Kyle Walker,DEF
+Kyle Walker,DEF
+Liam Delap,FWD
+Liam Delap,FWD
+Luke Mbete,DEF
+Luke Mbete-Tabu,DEF
+Manuel Akanji,DEF
+Máximo Perrone,MID
+Nathan Aké,DEF
+Nathan Aké,DEF
+Nico O'Reilly,MID
+Oleksandr Zinchenko,DEF
+Phil Foden,MID
+Phil Foden,MID
+Raheem Sterling,MID
+Rico Lewis,DEF
+Riyad Mahrez,MID
+Riyad Mahrez,MID
+Rodrigo Hernandez,MID
+Rodrigo Hernandez,MID
+Romeo Lavia,MID
+Rúben Gato Alves Dias,DEF
+Rúben Santos Gato Alves Dias,DEF
+Samuel Edozie,MID
+Scott Carson,GK
+Scott Carson,GK
+Sergio Gómez,DEF
+Shea Charles,MID
+Stefan Ortega Moreno,GK
+Tommy Doyle,MID
+Zack Steffen,GK
+Zack Steffen,GK"""
+        },
+        {
+            "question": "Who were the top 10 goal scorers in the 2022-23 season?",
+            "ground_truth": """
+Erling Haaland,36
+Harry Kane,30
+Ivan Toney,20
+Mohamed Salah,19
+Callum Wilson,18
+Marcus Rashford,17
+Ollie Watkins,15
+Gabriel Martinelli Silva,15
+Martin Ødegaard,15
+Aleksandar Mitrović,14"""
+        },
+        {
+            "question": "Who provided the most assists in the 2022-23 season? Show me the top 10?",
+            "ground_truth": """
+Kevin De Bruyne,18
+Mohamed Salah,13
+Morgan Gibbs-White,12
+Riyad Mahrez,12
+Bukayo Saka,12
+Michael Olise,11
+Trent Alexander-Arnold,11
+Jack Grealish,10
+Andreas Hoelgebaum Pereira,10
+Solly March,10"""
+        },
+        {
+            "question": "Which players had the most clean sheets in the 2022-23 season?",
+            "ground_truth": """
+Bruno Borges Fernandes,18
+David De Gea Quintana,17
+Kieran Trippier,16
+Fabian Schär,15
+Miguel Almirón Rejala,15
+Benjamin White,15
+Dan Burn,14
+Alisson Ramses Becker,14
+Gabriel Martinelli Silva,14
+Aaron Ramsdale,14"""
+        },
+        {
+            "question": "Who are the top 10 players in form as of gameweek 20 in the 2022-23 season?",
+            "ground_truth": """
+Martin Ødegaard,51
+Solly March,46
+Kieran Trippier,44
+Harry Kane,43
+Marcus Rashford,41
+Bruno Borges Fernandes,40
+Riyad Mahrez,39
+Ivan Toney,39
+Luke Shaw,38
+Christian Eriksen,35"""
+        },
+       {
+            "question": "Give me a complete summary of Erling Haaland's 2022-23 season?",
+            "ground_truth": """player,total_points,goals,assists,clean_sheets,minutes,bonus_points
+Erling Haaland,272,36,9,13,2767,40"""
+        },
+       {
+            "question": "Who earned the most bonus points in the 2022-23 season?",
+            "ground_truth": """player,total_bonus
+Harry Kane,48
+Erling Haaland,40
+Kieran Trippier,39
+Ivan Toney,35
+Martin Ødegaard,30
+Kevin De Bruyne,26
+Ollie Watkins,25
+Mohamed Salah,23
+Bruno Borges Fernandes,23
+Trent Alexander-Arnold,21"""
+        },
+      
+        {
+            "question": "Which players received the most yellow and red cards in the 2022-23 season?",
+            "ground_truth": """player,total_yellow,total_red,total_cards
+João Palhinha Gonçalves,total_yellow 14,total_red 0,total_cards 14
+Rúben da Silva Neves,total_yellow 12,total_red 0,total_cards 12
+Nélson Cabral Semedo,total_yellow 11,total_red 1,12
+Joelinton Cássio Apolinário de Lira,total_yellow 12,total_red 0,total_cards 12
+Fabio Henrique Tavares,total_yellow 11,total_red 0,total_cards 11
+Adam Smith,total_yellow 11,total_red 0,total_cards 11
+James Maddison,total_yellow 10,total_red 0,total_cards 10
+Moisés Caicedo Corozo,total_yellow 10,total_red 0,total_cards 10
+Conor Gallagher,total_yellow 9,total_red 1,total_cards 10
+Cristian Romero,total_yellow 9,total_red 1,total_cards 10"""
         }
     ]
     
@@ -566,233 +699,623 @@ def print_comparison_table(models, comparison_data, metrics):
 
 
 
-
-
-
-def evaluate_model_batch(model):
+def extract_entities_and_numbers(text: str) -> dict:
     """
-    Evaluate a single model on predefined test queries.
-    Queries are defined internally - only model name is required as input.
-    
-    Measures:
-    - Accuracy (based on similarity threshold > 0.8)
-    - Similarity score (0-1 range)
-    - Response time (seconds)
-    - Tokens used
-    
-    Args:
-        model: Model identifier (e.g., "mistralai/mistral-7b-instruct:free")
-    
-    Returns:
-        Dictionary with evaluation results and metrics
+    Extract player names, team names, and numbers from text.
+    Returns dictionary with entities and numbers.
     """
-    import time
+    import re
     
-    # =========================================================================
-    # CONFIGURATION - Test queries defined internally
-    # =========================================================================
+    text_lower = text.lower()
     
-    queries_with_truths = [
-        {
-            "question": "Who is the best FPL player this season?",
-            "ground_truth": "Erling Haaland"
-        },
-        {
-            "question": "Which midfielder has the most assists?",
-            "ground_truth": "Kevin De Bruyne"
-        },
-        {
-            "question": "Who are the top 3 defenders by points?",
-            "ground_truth": "Reece James, Trent Alexander-Arnold, Joao Cancelo"
-        },
-        {
-            "question": "Which goalkeeper has the most clean sheets?",
-            "ground_truth": "Alisson Becker"
-        },
-        {
-            "question": "Who is the best budget forward under 7 million?",
-            "ground_truth": "Ollie Watkins"
-        },
-        {
-            "question": "Which team has scored the most goals?",
-            "ground_truth": "Manchester City"
-        },
-        {
-            "question": "Who has the highest ICT index?",
-            "ground_truth": "Mohamed Salah"
-        },
-        {
-            "question": "Which player has the most bonus points?",
-            "ground_truth": "Erling Haaland"
-        },
-        {
-            "question": "What is the best captain choice for this gameweek?",
-            "ground_truth": "Erling Haaland"
-        },
-        {
-            "question": "Which defender has the most attacking returns?",
-            "ground_truth": "Trent Alexander-Arnold"
-        }
-    ]
+    # Extract numbers (integers and decimals)
+    numbers = set(re.findall(r'\b\d+\.?\d*\b', text))
     
-    # =========================================================================
-    # EVALUATION EXECUTION
-    # =========================================================================
+    # Extract entities more aggressively
+    entities = set()
     
-    results = []
-    total_accuracy = 0
-    total_response_time = 0
-    total_tokens = 0
-    total_similarity = 0
-    counted_accuracies = 0
-    
-    print(f"\n{'='*80}")
-    print(f"EVALUATING MODEL: {model}")
-    print(f"{'='*80}\n")
-    
-    for idx, item in enumerate(queries_with_truths, 1):
-        question = item["question"]
-        ground_truth = item.get("ground_truth")
+    # Method 1: Extract from lines (handles lists)
+    lines = text.split('\n')
+    for line in lines:
+        # Remove common prefixes (numbers, bullets, etc)
+        clean_line = re.sub(r'^\s*[\d\.\-\*]+\.?\s*', '', line)
+        clean_line = re.sub(r'\([^)]*\)', '', clean_line)  # Remove parentheses content
         
-        print(f"{'─'*80}")
-        print(f"Query {idx}/{len(queries_with_truths)}")
-        print(f"{'─'*80}")
-        print(f"❓ Question: {question}")
-        if ground_truth:
-            print(f"✓ Ground Truth: {ground_truth}")
+        # Extract capitalized word sequences
+        words = clean_line.split()
+        current_name = []
         
-        start = time.time()
-        try:
-            answer, tokens_used = call_llm(question, model)
-            print(f"🤖 Model Answer: {answer}")
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            results.append({
-                "question": question,
-                "ground_truth": ground_truth,
-                "error": str(e),
-                "response_time": None,
-                "accuracy": None,
-                "similarity_score": None,
-                "tokens_used": 0
-            })
-            print()
-            continue
-        
-        end = time.time()
-        response_time = end - start
-        total_tokens += tokens_used
-        total_response_time += response_time
-        
-        accuracy = None
-        similarity_score = None
-        if ground_truth:
-            # Calculate similarity between answer and ground truth
-            similarity_score = calculate_similarity(answer, ground_truth)
-            # Consider correct if similarity > threshold (0.6)
-            accuracy = int(similarity_score > 0.6)
-            total_accuracy += accuracy
-            total_similarity += similarity_score
-            counted_accuracies += 1
+        for word in words:
+            clean_word = re.sub(r'[^\w\s\-\']', '', word)
             
-            # Print evaluation metrics
-            status = "✅ CORRECT" if accuracy else "❌ INCORRECT"
-            print(f"\n{status}")
-            print(f"📊 Similarity: {similarity_score:.2%}")
-            print(f"⏱️  Response Time: {response_time:.3f}s")
-            print(f"🔢 Tokens Used: {tokens_used}")
-        else:
-            print(f"\n⏱️  Response Time: {response_time:.3f}s")
-            print(f"🔢 Tokens Used: {tokens_used}")
+            # Stop at position markers or common words
+            if clean_word.lower() in ['gk', 'def', 'mid', 'fwd', 'goalkeeper', 'defender', 'midfielder', 'forward']:
+                if current_name:
+                    entities.add(' '.join(current_name).lower())
+                    current_name = []
+                continue
+            
+            # Check if looks like a name part
+            if clean_word and len(clean_word) > 1:
+                # Add if capitalized or part of ongoing name
+                if clean_word[0].isupper() or current_name:
+                    current_name.append(clean_word.lower())
+                elif current_name:
+                    # End of name
+                    entities.add(' '.join(current_name).lower())
+                    current_name = []
         
-        print()
-        
-        results.append({
-            "question": question,
-            "ground_truth": ground_truth,
-            "answer": answer,
-            "response_time": response_time,
-            "accuracy": accuracy,
-            "similarity_score": similarity_score,
-            "tokens_used": tokens_used,
-        })
+        if current_name:
+            entities.add(' '.join(current_name).lower())
     
-    num_queries = len(queries_with_truths)
-    avg_response_time = total_response_time / num_queries if num_queries > 0 else 0
-    avg_accuracy = (total_accuracy / counted_accuracies) * 100 if counted_accuracies > 0 else None
-    avg_similarity = total_similarity / counted_accuracies if counted_accuracies > 0 else None
-    avg_tokens = total_tokens / num_queries if num_queries > 0 else 0
+    # Method 2: Also extract last names (single capitalized words > 3 chars)
+    all_words = re.findall(r'\b[A-Z][a-z]{3,}\b', text)
+    for word in all_words:
+        entities.add(word.lower())
     
-    # Print summary
-    print(f"{'='*80}")
-    print(f"EVALUATION SUMMARY")
-    print(f"{'='*80}")
-    print(f"Model: {model}")
-    print(f"Total Queries: {num_queries}")
-    print(f"Average Response Time: {avg_response_time:.3f}s")
-    if avg_accuracy is not None:
-        print(f"Average Accuracy: {avg_accuracy:.1f}%")
-        print(f"Average Similarity: {avg_similarity:.2%}")
-    print(f"Average Tokens Used: {avg_tokens:.1f}")
-    print(f"{'='*80}\n")
+    # Method 3: Extract hyphenated names
+    hyphenated = re.findall(r'\b[A-Z][a-z]+(?:-[A-Z][a-z]+)+\b', text)
+    for name in hyphenated:
+        entities.add(name.lower())
     
     return {
-        "model": model,
-        "results": results,
-        "average_response_time": avg_response_time,
-        "average_accuracy": avg_accuracy,
-        "average_similarity": avg_similarity,
-        "average_tokens_used": avg_tokens,
+        'entities': entities,
+        'numbers': numbers
     }
 
 
-def calculate_similarity(answer: str, ground_truth: str) -> float:
+def calculate_accuracy(answer: str, ground_truth: str) -> dict:
     """
-    Calculate similarity between answer and ground truth.
-    Returns a score between 0 and 1.
+    Calculate accuracy by comparing entities and numbers.
+    More lenient matching - focuses on whether entities are present.
+    Returns dict with accuracy score and details.
     """
-    from difflib import SequenceMatcher
+    import re
     
-    # Normalize text
-    answer_normalized = answer.lower().strip()
-    truth_normalized = ground_truth.lower().strip()
+    # Check if model refused to answer or has no information
+    refusal_patterns = [
+        'does not contain', 'not contain', 'no information', 'not available',
+        'cannot find', 'unable to find', 'unfortunately', 'i don\'t have',
+        'not provided', 'insufficient information', 'no data'
+    ]
     
-    # Extract key tokens (ignore common words)
-    common_words = {'is', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+    answer_lower = answer.lower()
+    if any(pattern in answer_lower for pattern in refusal_patterns):
+        # Model refused to answer - automatic fail
+        return {
+            'accuracy': 0.0,
+            'is_correct': False,
+            'entity_precision': 0.0,
+            'entity_recall': 0.0,
+            'entity_f1': 0.0,
+            'number_accuracy': 0.0,
+            'entity_matches': "0/0",
+            'number_matches': "0/0",
+            'details': 'Model refused to answer or stated no information available'
+        }
     
-    answer_tokens = set(word for word in answer_normalized.split() if word not in common_words)
-    truth_tokens = set(word for word in truth_normalized.split() if word not in common_words)
+    # Parse ground truth (CSV format)
+    truth_lines = [line.strip() for line in ground_truth.strip().split('\n') if line.strip()]
     
-    if not truth_tokens:
-        return 0.0
+    if len(truth_lines) <= 1:
+        return {
+            'accuracy': 0.0,
+            'entity_precision': 0.0,
+            'entity_recall': 0.0,
+            'number_accuracy': 0.0,
+            'details': 'No ground truth data'
+        }
     
-    # Method 1: Sequence matcher (good for exact string similarity)
-    sequence_similarity = SequenceMatcher(None, answer_normalized, truth_normalized).ratio()
+    # Extract expected entities (skip header)
+    expected_entities = set()
+    expected_numbers = set()
     
-    # Method 2: Token overlap (focuses on important words)
-    intersection = len(answer_tokens & truth_tokens)
-    token_overlap = intersection / len(truth_tokens)  # What % of ground truth tokens are in answer?
+    for line in truth_lines[1:]:
+        parts = [p.strip() for p in line.split(',')]
+        if parts:
+            # First column is usually the entity name
+            entity_name = parts[0].lower()
+            expected_entities.add(entity_name)
+            
+            # Extract last name (most important for matching)
+            name_parts = entity_name.split()
+            if name_parts:
+                # Add last name
+                expected_entities.add(name_parts[-1])
+                # Add first name if exists
+                if len(name_parts) > 1:
+                    expected_entities.add(name_parts[0])
+                # Add middle parts
+                for part in name_parts:
+                    if len(part) > 3:
+                        expected_entities.add(part)
+            
+            # Extract numbers
+            for part in parts[1:]:
+                if re.match(r'^\d+\.?\d*$', part):
+                    expected_numbers.add(part)
     
-    # Method 3: Partial containment (check if any ground truth token is in answer)
-    any_match = any(token in answer_normalized for token in truth_tokens)
-    partial_score = 1.0 if any_match else 0.0
+    # Remove duplicates from expected entities (since ground truth has dupes)
+    unique_expected = set()
+    for entity in expected_entities:
+        # Only keep substantial entities
+        if len(entity) > 2:
+            unique_expected.add(entity)
     
-    # Method 4: Check if ground truth is fully contained in answer
-    full_containment = 1.0 if truth_normalized in answer_normalized else 0.0
+    # Extract entities from answer
+    answer_data = extract_entities_and_numbers(answer)
+    found_entities = answer_data['entities']
+    found_numbers = answer_data['numbers']
     
-    # Combine methods with adjusted weights
-    # Higher weight on token_overlap for flexible matching
-    final_similarity = (
-        sequence_similarity * 0.2 +
-        token_overlap * 0.5 +        # Prioritize key word matches
-        partial_score * 0.1 +
-        full_containment * 0.2
-    )
+    # Calculate entity matching with flexible approach
+    matched_entities = set()
+    for expected in unique_expected:
+        for found in found_entities:
+            # Exact match
+            if expected == found:
+                matched_entities.add(expected)
+                break
+            # Substring match (for partial names)
+            elif expected in found or found in expected:
+                matched_entities.add(expected)
+                break
+            # Check if all words of expected are in found
+            expected_words = set(expected.split())
+            found_words = set(found.split())
+            if expected_words and expected_words.issubset(found_words):
+                matched_entities.add(expected)
+                break
     
-    return final_similarity
+    entity_matches = len(matched_entities)
+    
+    # For lists without numbers, don't penalize
+    has_numbers = len(expected_numbers) > 0
+    
+    if has_numbers:
+        # Calculate entity precision/recall
+        entity_precision = entity_matches / len(found_entities) if found_entities else 0
+        entity_recall = entity_matches / len(unique_expected) if unique_expected else 0
+        entity_f1 = 2 * (entity_precision * entity_recall) / (entity_precision + entity_recall) if (entity_precision + entity_recall) > 0 else 0
+        
+        # Calculate number matching
+        number_matches = len(expected_numbers & found_numbers)
+        number_accuracy = number_matches / len(expected_numbers) if expected_numbers else 0
+        
+        # Combined accuracy (70% entities, 30% numbers)
+        final_accuracy = (entity_f1 * 0.7) + (number_accuracy * 0.3)
+    else:
+        # For pure list queries (like "players on team"), use recall only
+        # If we found at least 50% of expected entities, it's good
+        entity_recall = entity_matches / len(unique_expected) if unique_expected else 0
+        entity_precision = 1.0  # Don't penalize for finding extra entities
+        entity_f1 = entity_recall  # Just use recall
+        number_accuracy = 1.0  # No numbers expected
+        
+        # For list queries, lower threshold
+        final_accuracy = entity_recall
+    
+    # Determine if correct (lower threshold for list queries)
+    threshold = 0.3 if not has_numbers else 0.5
+    is_correct = final_accuracy > threshold
+    
+    return {
+        'accuracy': final_accuracy,
+        'is_correct': is_correct,
+        'entity_precision': entity_precision,
+        'entity_recall': entity_recall,
+        'entity_f1': entity_f1,
+        'number_accuracy': number_accuracy,
+        'entity_matches': f"{entity_matches}/{len(unique_expected)}",
+        'number_matches': f"{len(expected_numbers & found_numbers)}/{len(expected_numbers)}" if expected_numbers else "N/A",
+        'details': f"Entities: {entity_matches}/{len(unique_expected)}" + (f", Numbers: {len(expected_numbers & found_numbers)}/{len(expected_numbers)}" if expected_numbers else " (list query)")
+    }
 
 
-
+def evaluate_all_models():
+    """
+    Evaluate multiple models on predefined test queries.
+    
+    Measures:
+    - Accuracy (NER-based entity and number matching)
+    - Response time (seconds)
+    - Tokens used
+    
+    Returns:
+        Dictionary with individual results and comparison table
+    """
+    import time
+    import pandas as pd
+    
+    # =========================================================================
+    # MODEL CONFIGURATION
+    # =========================================================================
+    
+    models = {
+        "Llama 3.3 70B": "meta-llama/llama-3.3-70b-instruct:free",
+        "Devstral 2512": "mistralai/devstral-2512:free",
+        "Nemotron Nano 30B": "nvidia/nemotron-3-nano-30b-a3b:free",
+    }
+    
+    # =========================================================================
+    # TEST QUERIES CONFIGURATION
+    # =========================================================================
+    
+    queries_with_truths = queries_with_truths = [
+    {
+        "question": "Who are the top 10 forwards in the 2022-23 season?",
+        "ground_truth": """player,season_points
+Erling Haaland,272
+Harry Kane,263
+Ivan Toney,182
+Ollie Watkins,175
+Callum Wilson,157
+Bryan Mbeumo,150
+Dominic Solanke,130
+Gabriel Fernando de Jesus,125
+Brennan Johnson,122
+Aleksandar Mitrović,107"""
+    },
+    {
+        "question": "How did Erling Haaland perform in gameweek 20 of the 2022-23 season?",
+        "ground_truth": """player,points,goals,assists,minutes
+Erling Haaland,2,0,0,90
+Erling Haaland,6,1,0,89"""
+    },
+    {
+        "question": "Compare Erling Haaland and Harry Kane's performance in the 2022-23 season",
+        "ground_truth": """player,total_points,goals,assists
+Erling Haaland,272,36,9
+Harry Kane,263,30,9"""
+    },
+    {
+        "question": "What were Manchester City's fixtures in the 2022-23 season?",
+        "ground_truth": """gameweek,home_team,away_team,kickoff_time
+1,West Ham,Man City,2022-08-07 15:30:00+00:00
+3,Newcastle,Man City,2022-08-21 15:30:00+00:00
+6,Aston Villa,Man City,2022-09-03 16:30:00+00:00
+8,Wolves,Man City,2022-09-17 11:30:00+00:00
+11,Liverpool,Man City,2022-10-16 15:30:00+00:00
+14,Leicester,Man City,2022-10-29 11:30:00+00:00
+17,Leeds,Man City,2022-12-28 20:00:00+00:00
+19,Chelsea,Man City,2023-01-05 20:00:00+00:00
+20,Man Utd,Man City,2023-01-14 12:30:00+00:00
+22,Spurs,Man City,2023-02-05 16:30:00+00:00
+23,Arsenal,Man City,2023-02-15 19:30:00+00:00
+24,Nott'm Forest,Man City,2023-02-18 15:00:00+00:00
+25,Bournemouth,Man City,2023-02-25 17:30:00+00:00
+27,Crystal Palace,Man City,2023-03-11 17:30:00+00:00
+30,Southampton,Man City,2023-04-08 16:30:00+00:00
+34,Fulham,Man City,2023-04-30 13:00:00+00:00
+36,Everton,Man City,2023-05-14 13:00:00+00:00
+37,Brighton,Man City,2023-05-24 19:00:00+00:00
+38,Brentford,Man City,2023-05-28 15:30:00+00:00"""
+    },
+    {
+        "question": "Which players are on Manchester City?",
+        "ground_truth": """player,position
+Alex Robertson,MID
+Aymeric Laporte,DEF
+Aymeric Laporte,DEF
+Ben Knight,MID
+Benjamin Mendy,DEF
+Bernardo Mota Veiga de Carvalho e Silva,MID
+Bernardo Veiga de Carvalho e Silva,MID
+Cieran Slicker,GK
+Claudio Gomes,MID
+Cole Palmer,MID
+Cole Palmer,MID
+Conrad Egan-Riley,DEF
+Ederson Santana de Moraes,GK
+Ederson Santana de Moraes,GK
+Erling Haaland,FWD
+Fernando Luiz Rosa,MID
+Ferran Torres,MID
+Gabriel Fernando de Jesus,FWD
+Ilkay Gündogan,MID
+Ilkay Gündogan,MID
+Jack Grealish,MID
+Jack Grealish,MID
+James McAtee,MID
+James McAtee,MID
+John Stones,DEF
+John Stones,FWD
+John Stones,DEF
+Josh Wilson-Esbrand,DEF
+Joshua Wilson-Esbrand,DEF
+João Cancelo,DEF
+João Pedro Cavaco Cancelo,DEF
+Julián Álvarez,FWD
+Kalvin Phillips,MID
+Kayky da Silva Chagas,FWD
+Kevin De Bruyne,MID
+Kevin De Bruyne,MID
+Kyle Walker,DEF
+Kyle Walker,DEF
+Liam Delap,FWD
+Liam Delap,FWD
+Luke Mbete,DEF
+Luke Mbete-Tabu,DEF
+Manuel Akanji,DEF
+Máximo Perrone,MID
+Nathan Aké,DEF
+Nathan Aké,DEF
+Nico O'Reilly,MID
+Oleksandr Zinchenko,DEF
+Phil Foden,MID
+Phil Foden,MID
+Raheem Sterling,MID
+Rico Lewis,DEF
+Riyad Mahrez,MID
+Riyad Mahrez,MID
+Rodrigo Hernandez,MID
+Rodrigo Hernandez,MID
+Romeo Lavia,MID
+Rúben Gato Alves Dias,DEF
+Rúben Santos Gato Alves Dias,DEF
+Samuel Edozie,MID
+Scott Carson,GK
+Scott Carson,GK
+Sergio Gómez,DEF
+Shea Charles,MID
+Stefan Ortega Moreno,GK
+Tommy Doyle,MID
+Zack Steffen,GK
+Zack Steffen,GK"""
+    },
+    {
+        "question": "Who were the top 10 goal scorers in the 2022-23 season?",
+        "ground_truth": """player,total_goals
+Erling Haaland,36
+Harry Kane,30
+Ivan Toney,20
+Mohamed Salah,19
+Callum Wilson,18
+Marcus Rashford,17
+Ollie Watkins,15
+Gabriel Martinelli Silva,15
+Martin Ødegaard,15
+Aleksandar Mitrović,14"""
+    },
+    {
+        "question": "Who provided the most assists in the 2022-23 season? Show me the top 10",
+        "ground_truth": """player,total_assists
+Kevin De Bruyne,18
+Mohamed Salah,13
+Morgan Gibbs-White,12
+Riyad Mahrez,12
+Bukayo Saka,12
+Michael Olise,11
+Trent Alexander-Arnold,11
+Jack Grealish,10
+Andreas Hoelgebaum Pereira,10
+Solly March,10"""
+    },
+    {
+        "question": "Which players had the most clean sheets in the 2022-23 season?",
+        "ground_truth": """player,total_clean_sheets
+Bruno Borges Fernandes,18
+David De Gea Quintana,17
+Kieran Trippier,16
+Fabian Schär,15
+Miguel Almirón Rejala,15
+Benjamin White,15
+Dan Burn,14
+Alisson Ramses Becker,14
+Gabriel Martinelli Silva,14
+Aaron Ramsdale,14"""
+    },
+    {
+        "question": "Who are the top 10 players in form as of gameweek 20 in the 2022-23 season?",
+        "ground_truth": """player,form_points
+Martin Ødegaard,51
+Solly March,46
+Kieran Trippier,44
+Harry Kane,43
+Marcus Rashford,41
+Bruno Borges Fernandes,40
+Riyad Mahrez,39
+Ivan Toney,39
+Luke Shaw,38
+Christian Eriksen,35"""
+    },
+    {
+        "question": "Give me a complete summary of Erling Haaland's 2022-23 season",
+        "ground_truth": """player,total_points,goals,assists,clean_sheets,minutes,bonus_points
+Erling Haaland,272,36,9,13,2767,40"""
+    },
+    {
+        "question": "Who earned the most bonus points in the 2022-23 season?",
+        "ground_truth": """player,total_bonus
+Harry Kane,48
+Erling Haaland,40
+Kieran Trippier,39
+Ivan Toney,35
+Martin Ødegaard,30
+Kevin De Bruyne,26
+Ollie Watkins,25
+Mohamed Salah,23
+Bruno Borges Fernandes,23
+Trent Alexander-Arnold,21"""
+    },
+    {
+        "question": "Which players received the most yellow and red cards in the 2022-23 season?",
+        "ground_truth": """player,total_yellow,total_red,total_cards
+João Palhinha Gonçalves,14,0,14
+Rúben da Silva Neves,12,0,12
+Nélson Cabral Semedo,11,1,12
+Joelinton Cássio Apolinário de Lira,12,0,12
+Fabio Henrique Tavares,11,0,11
+Adam Smith,11,0,11
+James Maddison,10,0,10
+Moisés Caicedo Corozo,10,0,10
+Conor Gallagher,9,1,10
+Cristian Romero,9,1,10"""
+    }
+]
+    
+    # =========================================================================
+    # EVALUATE ALL MODELS
+    # =========================================================================
+    
+    all_model_results = {}
+    
+    for model_name, model_id in models.items():
+        print(f"\n{'='*80}")
+        print(f"EVALUATING MODEL: {model_name}")
+        print(f"{'='*80}\n")
+        
+        results = []
+        total_response_time = 0
+        total_tokens = 0
+        total_accuracy = 0
+        correct_count = 0
+        evaluated_count = 0
+        
+        for idx, item in enumerate(queries_with_truths, 1):
+            question = item["question"]
+            ground_truth = item.get("ground_truth")
+            
+            print(f"{'─'*80}")
+            print(f"Query {idx}/{len(queries_with_truths)}")
+            print(f"{'─'*80}")
+            print(f"❓ Question: {question}")
+            
+            start = time.time()
+            try:
+                answer, tokens_used = call_llm(question, model_id)
+                answer_preview = str(answer)[:300] + "..." if len(str(answer)) > 300 else str(answer)
+                print(f"🤖 Model Answer: {answer_preview}")
+                
+                # Print ground truth for comparison
+                if ground_truth:
+                    truth_preview = ground_truth[:200] + "..." if len(ground_truth) > 200 else ground_truth
+                    print(f"📋 Ground Truth: {truth_preview}")
+                    
+            except Exception as e:
+                print(f"❌ Error: {str(e)}")
+                results.append({
+                    "question": question,
+                    "ground_truth": ground_truth,
+                    "answer": None,
+                    "error": str(e),
+                    "response_time": None,
+                    "tokens_used": 0,
+                    "accuracy": None
+                })
+                print()
+                continue
+            
+            end = time.time()
+            response_time = end - start
+            total_tokens += tokens_used
+            total_response_time += response_time
+            
+            # Calculate accuracy
+            accuracy_result = calculate_accuracy(str(answer), ground_truth)
+            accuracy_score = accuracy_result['accuracy']
+            is_correct = accuracy_result['is_correct']
+            
+            total_accuracy += accuracy_score
+            if is_correct:
+                correct_count += 1
+            evaluated_count += 1
+            
+            status = "✅ CORRECT" if is_correct else "❌ INCORRECT"
+            print(f"\n{status}")
+            print(f"📊 Accuracy: {accuracy_score:.2%}")
+            print(f"   Entity F1: {accuracy_result['entity_f1']:.2%}")
+            print(f"   Number Match: {accuracy_result['number_accuracy']:.2%}")
+            print(f"   Details: {accuracy_result['details']}")
+            print(f"⏱️  Response Time: {response_time:.3f}s")
+            print(f"🔢 Tokens Used: {tokens_used}")
+            print()
+            
+            results.append({
+                "question": question,
+                "ground_truth": ground_truth,
+                "answer": str(answer),
+                "response_time": response_time,
+                "tokens_used": tokens_used,
+                "accuracy": accuracy_score,
+                "is_correct": is_correct,
+                "accuracy_details": accuracy_result
+            })
+        
+        num_queries = len(queries_with_truths)
+        avg_response_time = total_response_time / num_queries if num_queries > 0 else 0
+        avg_tokens = total_tokens / num_queries if num_queries > 0 else 0
+        avg_accuracy = (total_accuracy / evaluated_count) * 100 if evaluated_count > 0 else 0
+        correct_percentage = (correct_count / evaluated_count) * 100 if evaluated_count > 0 else 0
+        
+        all_model_results[model_name] = {
+            "model_id": model_id,
+            "results": results,
+            "average_response_time": avg_response_time,
+            "average_tokens_used": avg_tokens,
+            "average_accuracy": avg_accuracy,
+            "correct_percentage": correct_percentage,
+            "correct_count": correct_count,
+            "total_queries": evaluated_count
+        }
+        
+        print(f"{'='*80}")
+        print(f"SUMMARY FOR {model_name}")
+        print(f"{'='*80}")
+        print(f"Total Queries: {num_queries}")
+        print(f"Correct Answers: {correct_count}/{evaluated_count} ({correct_percentage:.1f}%)")
+        print(f"Average Accuracy Score: {avg_accuracy:.1f}%")
+        print(f"Average Response Time: {avg_response_time:.3f}s")
+        print(f"Average Tokens Used: {avg_tokens:.1f}")
+        print(f"{'='*80}\n")
+    
+    # =========================================================================
+    # CREATE COMPARISON TABLE
+    # =========================================================================
+    
+    print(f"\n{'='*80}")
+    print(f"MODEL COMPARISON TABLE")
+    print(f"{'='*80}\n")
+    
+    comparison_data = []
+    for model_name, metrics in all_model_results.items():
+        comparison_data.append({
+            "Model": model_name,
+            "Correct (%)": f"{metrics['correct_percentage']:.1f}",
+            "Avg Accuracy": f"{metrics['average_accuracy']:.1f}%",
+            "Avg Time (s)": f"{metrics['average_response_time']:.3f}",
+            "Avg Tokens": f"{metrics['average_tokens_used']:.0f}"
+        })
+    
+    df = pd.DataFrame(comparison_data)
+    print(df.to_string(index=False))
+    print(f"\n{'='*80}\n")
+    
+    # Find best model for each metric
+    print("🏆 BEST PERFORMERS:")
+    print(f"{'─'*80}")
+    
+    best_accuracy = max(all_model_results.items(), key=lambda x: x[1]['average_accuracy'])
+    print(f"Best Accuracy: {best_accuracy[0]} ({best_accuracy[1]['average_accuracy']:.1f}%)")
+    
+    best_correct = max(all_model_results.items(), key=lambda x: x[1]['correct_percentage'])
+    print(f"Most Correct: {best_correct[0]} ({best_correct[1]['correct_count']}/{best_correct[1]['total_queries']})")
+    
+    best_speed = min(all_model_results.items(), key=lambda x: x[1]['average_response_time'])
+    print(f"Fastest: {best_speed[0]} ({best_speed[1]['average_response_time']:.3f}s)")
+    
+    best_efficiency = min(all_model_results.items(), key=lambda x: x[1]['average_tokens_used'])
+    print(f"Most Efficient: {best_efficiency[0]} ({best_efficiency[1]['average_tokens_used']:.0f} tokens)")
+    
+    print(f"{'='*80}\n")
+    
+    return {
+        "individual_results": all_model_results,
+        "comparison_table": df,
+        "summary": {
+            "total_models_evaluated": len(models),
+            
+        }
+    }
 
 
 
@@ -835,3 +1358,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
