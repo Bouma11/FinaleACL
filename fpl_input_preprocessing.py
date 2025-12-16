@@ -172,6 +172,18 @@ class FPLInputPreprocessorLLM:
         """Enhanced intent classification with LLM support"""
         text_lower = text.lower()
         
+        # ===== EMERGENCY HOTFIX =====
+        # Force performance_query for any question about specific gameweek performance
+        gameweek_patterns = [
+            r'performance.*gameweek.*\d+',
+            r'gameweek.*\d+.*performance',
+            r'how.*did.*gameweek.*\d+',
+            r'what.*was.*gameweek.*\d+'
+        ]
+        for pattern in gameweek_patterns:
+           if re.search(pattern, text_lower, re.IGNORECASE):
+                return 'performance_query', 0.99  # Highest confidence
+    # ===== END HOTFIX =====
         # Rule-based classification (fast path)
         
         # Top/best/leading queries

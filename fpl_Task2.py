@@ -55,157 +55,235 @@ class FPLGraphRetrieval:
     # =========================================================================
     
     def _init_query_templates(self):
-        """Initialize 12 Cypher query templates for different intents."""
+        """Initialize 12 FIXED Cypher query templates for different intents."""
         self.query_templates = {
             
             'top_players_by_position': """
+                // Top players by position for a specific season
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
                 MATCH (p:Player)-[:PLAYS_AS]->(pos:Position {name: $position})
-                MATCH (p)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
-                OPTIONAL MATCH (p)-[:PLAYS_FOR]->(t:Team)
+                MATCH (p)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       COALESCE(t.name, 'Unknown') AS team,
-                       SUM(played.total_points) AS total_points,
-                       SUM(played.goals_scored) AS goals,
-                       SUM(played.assists) AS assists
+                    t.name AS team,
+                    SUM(played.total_points) AS total_points,
+                    SUM(played.goals_scored) AS goals,
+                    SUM(played.assists) AS assists,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY total_points DESC
                 LIMIT $limit
             """,
             
             'player_gameweek_performance': """
-                MATCH (p:Player {player_name: $player_name})-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {GW_number: $gameweek, season: $season})
+                // Player performance in specific gameweek
+                MATCH (gw:Gameweek {season: $season, GW_number: $gameweek})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player {player_name: $player_name})-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       played.total_points AS points,
-                       played.goals_scored AS goals,
-                       played.assists AS assists,
-                       played.minutes AS minutes,
-                       played.bonus AS bonus
+                    t.name AS team,
+                    played.total_points AS points,
+                    played.goals_scored AS goals,
+                    played.assists AS assists,
+                    played.minutes AS minutes,
+                    played.bonus AS bonus,
+                    played.clean_sheets AS clean_sheets,
+                    played.ict_index AS ict_index
             """,
             
             'compare_players': """
-                MATCH (p1:Player {player_name: $player_name})-[played1:PLAYED_IN]->(f1:Fixture)
-                MATCH (f1)<-[:HAS_FIXTURE]-(gw1:Gameweek {season: $season})
+                // Compare two players for a specific season - FIXED VERSION
+                MATCH (p1:Player {player_name: $player_name})
+                MATCH (p2:Player {player_name: $player_name2})
+                
+                // Get player 1 stats for the season
+                OPTIONAL MATCH (p1)-[played1:PLAYED_IN]->(f1:Fixture)
+                WHERE EXISTS {
+                    MATCH (f1)<-[:HAS_FIXTURE]-(:Gameweek {season: $season})
+                }
+                
+                // Get player 2 stats for the season
+                OPTIONAL MATCH (p2)-[played2:PLAYED_IN]->(f2:Fixture)
+                WHERE EXISTS {
+                    MATCH (f2)<-[:HAS_FIXTURE]-(:Gameweek {season: $season})
+                }
+                
+                // Get teams
                 OPTIONAL MATCH (p1)-[:PLAYS_FOR]->(t1:Team)
-                MATCH (p2:Player {player_name: $player_name2})-[played2:PLAYED_IN]->(f2:Fixture)
-                MATCH (f2)<-[:HAS_FIXTURE]-(gw2:Gameweek {season: $season})
                 OPTIONAL MATCH (p2)-[:PLAYS_FOR]->(t2:Team)
-                WITH p1, t1, SUM(played1.total_points) AS p1_points, 
-                     SUM(played1.goals_scored) AS p1_goals,
-                     SUM(played1.assists) AS p1_assists,
-                     p2, t2, SUM(played2.total_points) AS p2_points,
-                     SUM(played2.goals_scored) AS p2_goals,
-                     SUM(played2.assists) AS p2_assists
-                RETURN p1.player_name AS player1, COALESCE(t1.name, 'Unknown') AS team1, p1_points, p1_goals, p1_assists,
-                       p2.player_name AS player2, COALESCE(t2.name, 'Unknown') AS team2, p2_points, p2_goals, p2_assists
+                
+                // Aggregate with DISTINCT to avoid duplicates
+                WITH p1, t1, 
+                    SUM(DISTINCT played1.total_points) AS p1_points,
+                    SUM(DISTINCT played1.goals_scored) AS p1_goals,
+                    SUM(DISTINCT played1.assists) AS p1_assists,
+                    COUNT(DISTINCT f1) AS p1_games,
+                    p2, t2,
+                    SUM(DISTINCT played2.total_points) AS p2_points,
+                    SUM(DISTINCT played2.goals_scored) AS p2_goals,
+                    SUM(DISTINCT played2.assists) AS p2_assists,
+                    COUNT(DISTINCT f2) AS p2_games
+                
+                RETURN p1.player_name AS player1, 
+                    COALESCE(t1.name, 'Unknown') AS team1, 
+                    COALESCE(p1_points, 0) AS p1_points,
+                    COALESCE(p1_goals, 0) AS p1_goals,
+                    COALESCE(p1_assists, 0) AS p1_assists,
+                    p1_games,
+                    
+                    p2.player_name AS player2, 
+                    COALESCE(t2.name, 'Unknown') AS team2, 
+                    COALESCE(p2_points, 0) AS p2_points,
+                    COALESCE(p2_goals, 0) AS p2_goals,
+                    COALESCE(p2_assists, 0) AS p2_assists,
+                    p2_games
             """,
             
             'team_fixtures': """
-                MATCH (t:Team {name: $team})<-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]-(f:Fixture)
+                // Team fixtures for a specific season
+                MATCH (t:Team {name: $team})
+                MATCH (f:Fixture)-[:HAS_HOME_TEAM|HAS_AWAY_TEAM]->(t)
                 MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
-                OPTIONAL MATCH (f)-[:HAS_HOME_TEAM]->(home:Team)
-                OPTIONAL MATCH (f)-[:HAS_AWAY_TEAM]->(away:Team)
-                RETURN gw.GW_number AS gameweek, 
-                       home.name AS home_team, 
-                       away.name AS away_team,
-                       f.kickoff_time AS kickoff
+                MATCH (f)-[:HAS_HOME_TEAM]->(home:Team)
+                MATCH (f)-[:HAS_AWAY_TEAM]->(away:Team)
+                RETURN gw.GW_number AS gameweek,
+                    home.name AS home_team,
+                    away.name AS away_team,
+                    f.kickoff_time AS kickoff,
+                    CASE WHEN home = t THEN 'home' ELSE 'away' END AS venue
                 ORDER BY gw.GW_number
             """,
             
             'players_by_team': """
-                // Use the new PLAYS_FOR relationship to map players directly to their team
-                MATCH (p:Player)-[:PLAYS_FOR]->(t:Team {name: $team})
+                // Players by team
+                MATCH (t:Team {name: $team})
+                MATCH (p:Player)-[:PLAYS_FOR]->(t)
                 OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
-                RETURN DISTINCT p.player_name AS player,
-                       COALESCE(pos.name, 'Unknown') AS position
+                RETURN p.player_name AS player,
+                    COALESCE(pos.name, 'Unknown') AS position,
+                    p.player_element AS player_id
                 ORDER BY position, p.player_name
             """,
 
             'player_team': """
-                // Return the team for a given player (direct PLAYS_FOR relationship)
+                // Get team for a specific player
                 MATCH (p:Player {player_name: $player_name})-[:PLAYS_FOR]->(t:Team)
-                RETURN p.player_name AS player, t.name AS team
+                RETURN p.player_name AS player, 
+                    t.name AS team,
+                    p.player_element AS player_id
             """,
             
             'top_scorers': """
-                MATCH (p:Player)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
+                // Top scorers for a specific season
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       SUM(played.goals_scored) AS goals,
-                       SUM(played.total_points) AS points
+                    t.name AS team,
+                    SUM(played.goals_scored) AS goals,
+                    SUM(played.total_points) AS points,
+                    SUM(played.assists) AS assists,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY goals DESC
                 LIMIT $limit
             """,
             
             'top_assisters': """
-                MATCH (p:Player)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
+                // Top assisters for a specific season
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       SUM(played.assists) AS assists,
-                       SUM(played.total_points) AS points
+                    t.name AS team,
+                    SUM(played.assists) AS assists,
+                    SUM(played.total_points) AS points,
+                    SUM(played.goals_scored) AS goals,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY assists DESC
                 LIMIT $limit
             """,
             
             'clean_sheet_leaders': """
+                // Clean sheet leaders for a specific season (GK and DEF only)
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
                 MATCH (p:Player)-[:PLAYS_AS]->(pos:Position)
                 WHERE pos.name IN ['GK', 'DEF']
-                MATCH (p)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
+                MATCH (p)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       pos.name AS position,
-                       SUM(played.clean_sheets) AS clean_sheets,
-                       SUM(played.total_points) AS points
+                    pos.name AS position,
+                    t.name AS team,
+                    SUM(played.clean_sheets) AS clean_sheets,
+                    SUM(played.total_points) AS points,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY clean_sheets DESC
                 LIMIT $limit
             """,
             
             'players_by_form': """
-                MATCH (p:Player)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
-                WHERE gw.GW_number >= $gameweek - 5
+                // Players by recent form (last 5 gameweeks)
+                MATCH (gw:Gameweek {season: $season})
+                WHERE gw.GW_number >= $gameweek - 5 AND gw.GW_number <= $gameweek
+                MATCH (gw)<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       AVG(played.form) AS avg_form,
-                       SUM(played.total_points) AS recent_points,
-                       played.goals_scored AS recent_goals,
-                       played.assists AS recent_assists
+                    t.name AS team,
+                    AVG(played.form) AS avg_form,
+                    SUM(played.total_points) AS recent_points,
+                    SUM(played.goals_scored) AS recent_goals,
+                    SUM(played.assists) AS recent_assists,
+                    COUNT(DISTINCT f) AS games_count
                 ORDER BY avg_form DESC
                 LIMIT $limit
             """,
             
             'player_season_summary': """
-                MATCH (p:Player {player_name: $player_name})-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
+                // Player season summary
+                MATCH (p:Player {player_name: $player_name})
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p)-[played:PLAYED_IN]->(f)
                 MATCH (p)-[:PLAYS_AS]->(pos:Position)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       pos.name AS position,
-                       COUNT(f) AS games_played,
-                       SUM(played.minutes) AS total_minutes,
-                       SUM(played.total_points) AS total_points,
-                       SUM(played.goals_scored) AS goals,
-                       SUM(played.assists) AS assists,
-                       SUM(played.clean_sheets) AS clean_sheets,
-                       SUM(played.bonus) AS bonus_points,
-                       AVG(played.ict_index) AS avg_ict
+                    pos.name AS position,
+                    t.name AS team,
+                    COUNT(DISTINCT f) AS games_played,
+                    SUM(played.minutes) AS total_minutes,
+                    SUM(played.total_points) AS total_points,
+                    SUM(played.goals_scored) AS goals,
+                    SUM(played.assists) AS assists,
+                    SUM(played.clean_sheets) AS clean_sheets,
+                    SUM(played.bonus) AS bonus_points,
+                    AVG(played.ict_index) AS avg_ict,
+                    AVG(played.form) AS avg_form
             """,
             
             'bonus_leaders': """
-                MATCH (p:Player)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
-                RETURN p.player_name AS player ,
-                       SUM(played.bonus) AS total_bonus,
-                       SUM(played.total_points) AS total_points
+                // Bonus points leaders for a specific season
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
+                RETURN p.player_name AS player,
+                    t.name AS team,
+                    SUM(played.bonus) AS total_bonus,
+                    SUM(played.total_points) AS total_points,
+                    SUM(played.bps) AS bps,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY total_bonus DESC
                 LIMIT $limit
             """,
             
             'most_cards': """
-                MATCH (p:Player)-[played:PLAYED_IN]->(f:Fixture)
-                MATCH (f)<-[:HAS_FIXTURE]-(gw:Gameweek {season: $season})
+                // Players with most cards (yellow/red) for a specific season
+                MATCH (gw:Gameweek {season: $season})<-[:HAS_FIXTURE]-(f:Fixture)
+                MATCH (p:Player)-[played:PLAYED_IN]->(f)
+                MATCH (p)-[:PLAYS_FOR]->(t:Team)
                 RETURN p.player_name AS player,
-                       SUM(played.yellow_cards) AS yellows,
-                       SUM(played.red_cards) AS reds,
-                       SUM(played.yellow_cards) + SUM(played.red_cards) * 2 AS card_score
+                    t.name AS team,
+                    SUM(played.yellow_cards) AS yellows,
+                    SUM(played.red_cards) AS reds,
+                    SUM(played.yellow_cards) + SUM(played.red_cards) * 2 AS card_score,
+                    COUNT(DISTINCT f) AS games_played
                 ORDER BY card_score DESC
                 LIMIT $limit
             """
@@ -240,10 +318,11 @@ class FPLGraphRetrieval:
     def select_query(self, intent: str, entities: Dict) -> str:
         """Select appropriate query template based on intent and available entities.
         
-        Priority order:
-        1. Entity-specific queries (players, teams, gameweeks, positions)
-        2. Intent-based queries (from intent_primary_query mapping)
-        3. Generic fallback (top_scorers)
+        Priority order (highest to lowest):
+        1. Intent-specific with complete entities (highest confidence)
+        2. Entity combinations that clearly indicate a specific query type
+        3. Intent-based fallback
+        4. Generic fallback
         """
         
         metrics = entities.get('metrics', [])
@@ -252,61 +331,97 @@ class FPLGraphRetrieval:
         players = entities.get('players', [])
         gameweeks = entities.get('gameweeks', [])
         
-        # ─────────────────────────────────────────────────────────────
-        # PRIORITY 1: ENTITY-SPECIFIC QUERIES (HIGHEST CONFIDENCE)
-        # ─────────────────────────────────────────────────────────────
+        # =====================================================================
+        # PRIORITY 1: HIGH-CONFIDENCE INTENT + ENTITY COMBINATIONS
+        # =====================================================================
         
-        # Two players = comparison query (even if intent isn't 'comparison')
-        if len(players) >= 2:
-            return 'compare_players'
-        
-        # One player + gameweek = gameweek performance
-        if len(players) >= 1 and len(gameweeks) >= 1:
+        # 1A: PERFORMANCE QUERY - Single player + specific gameweek
+        if intent == 'performance_query' and len(players) >= 1 and len(gameweeks) >= 1:
             return 'player_gameweek_performance'
         
-        # One player alone (no gameweek) = season summary
-        if len(players) >= 1 and len(gameweeks) == 0:
+        # 1B: COMPARISON QUERY - Exactly 2 players (no gameweek needed for comparison)
+        if intent == 'comparison' and len(players) == 2:
+            return 'compare_players'
+        
+        # 1C: PLAYER SEARCH - Single player, no gameweek
+        if intent == 'player_search' and len(players) >= 1 and len(gameweeks) == 0:
             return 'player_season_summary'
         
-        # Team + gameweek context = team fixtures
+        # =====================================================================
+        # PRIORITY 2: CLEAR ENTITY PATTERNS (regardless of intent)
+        # =====================================================================
+        
+        # 2A: Single player + gameweek = ALWAYS gameweek performance
+        if len(players) == 1 and len(gameweeks) >= 1:
+            return 'player_gameweek_performance'
+        
+        # 2B: Two players = comparison (but check if it's REALLY a comparison)
+        if len(players) == 2:
+            # Extra validation: check if query has comparison words
+            query_text = str(entities).lower()
+            comparison_words = ['vs', 'versus', 'compare', 'comparison', 'versus']
+            if any(word in query_text for word in comparison_words):
+                return 'compare_players'
+        
+                # Two players without comparison words? Might be a mistake
+                # Fall through to lower priority checks
+        
+        # 2C: Team + gameweek = team fixtures
         if len(teams) >= 1 and len(gameweeks) >= 1:
             return 'team_fixtures'
         
-        # Team alone (check intent for differentiation)
+        # 2D: Team alone (depends on context)
         if len(teams) >= 1:
-            if intent == 'fixture_query':
-                return 'team_fixtures'
-            return 'players_by_team'
+            # If asking about "players on team"
+            if 'players' in str(entities).lower() or 'roster' in str(entities).lower():
+                return 'players_by_team'
+            return 'team_fixtures'  # Default for team queries
         
-        # Gameweek alone = players by form
-        if len(gameweeks) >= 1 and len(players) == 0:
-            return 'players_by_form'
-        
-        # Position alone = top players by position
-        if len(positions) >= 1:
+        # 2E: Position alone = top players by position
+        if len(positions) >= 1 and len(players) == 0:
             return 'top_players_by_position'
         
-        # Metric-specific queries
-        if 'clean_sheets' in metrics:
-            return 'clean_sheet_leaders'
-        if 'assists' in metrics:
-            return 'top_assisters'
-        if 'bonus' in metrics or 'bonus_points' in metrics:
-            return 'bonus_leaders'
-        if 'cards' in metrics or 'yellow_cards' in metrics or 'red_cards' in metrics:
-            return 'most_cards'
+        # =====================================================================
+        # PRIORITY 3: INTENT-BASED FALLBACK (using corrected mapping)
+        # =====================================================================
         
-        # ─────────────────────────────────────────────────────────────
-        # PRIORITY 2: INTENT-BASED QUERIES (using FIXED mapping)
-        # ─────────────────────────────────────────────────────────────
-
-        # Use the corrected intent_primary_query mapping
-        if intent in self.intent_primary_query:
-            return self.intent_primary_query[intent]
+        intent_query_map = {
+            'recommendation': 'top_scorers',
+            'performance_query': 'player_gameweek_performance',
+            'comparison': 'compare_players',
+            'player_search': 'player_season_summary',
+            'fixture_query': 'team_fixtures',
+            'form_query': 'players_by_form',
+            'team_analysis': 'players_by_team',
+            'value_analysis': 'top_players_by_position',
+            'general_query': 'top_scorers',
+            'player_team_query': 'player_team'
+        }
         
-        # ─────────────────────────────────────────────────────────────
-        # PRIORITY 3: GENERIC FALLBACK
-        # ─────────────────────────────────────────────────────────────
+        if intent in intent_query_map:
+            return intent_query_map[intent]
+        
+        # =====================================================================
+        # PRIORITY 4: METRIC-SPECIFIC FALLBACK
+        # =====================================================================
+        
+        metric_to_query = {
+            'clean_sheets': 'clean_sheet_leaders',
+            'assists': 'top_assisters',
+            'goals_scored': 'top_scorers',
+            'bonus': 'bonus_leaders',
+            'cards': 'most_cards',
+            'form': 'players_by_form',
+            'value': 'top_players_by_position'
+        }
+        
+        for metric in metrics:
+            if metric in metric_to_query:
+                return metric_to_query[metric]
+        
+        # =====================================================================
+        # PRIORITY 5: SAFE GENERIC FALLBACK
+        # =====================================================================
         return 'top_scorers'
     
     def execute_cypher(self, query_name: str, params: Dict) -> List[Dict]:
@@ -1119,9 +1234,9 @@ class FPLGraphRetrieval:
         return embedding
     
     def semantic_search(self, query_embedding: np.ndarray, top_k: int = 10, 
-                        position: str = None, embedding_type: str = 'numeric') -> List[Dict]:
+                    position: str = None, embedding_type: str = 'numeric') -> List[Dict]:
         """
-        Find similar players using cosine similarity.
+        Find similar players using cosine similarity with any embedding type.
         
         Args:
             query_embedding: Query vector (dims depend on embedding_type)
@@ -1135,19 +1250,23 @@ class FPLGraphRetrieval:
             'minilm': 'embedding_minilm',
             'mpnet': 'embedding_mpnet'
         }
-        emb_prop = property_map.get(embedding_type, 'embedding')
+        
+        if embedding_type not in property_map:
+            raise ValueError(f"Unsupported embedding_type: {embedding_type}")
+        
+        emb_prop = property_map[embedding_type]
         
         # Build query
         if position:
             query = f"""
                 MATCH (p:Player)
                 WHERE p.{emb_prop} IS NOT NULL
-                OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
+                OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position {{name: $position}})
                 WITH p.player_element AS player_id,
-                     COLLECT(DISTINCT p.player_name)[0] AS player,
-                     COLLECT(DISTINCT pos.name)[0] AS position,
-                     p.{emb_prop} AS embedding
-                WHERE position = $position
+                    COLLECT(DISTINCT p.player_name)[0] AS player,
+                    COLLECT(DISTINCT pos.name)[0] AS position,
+                    p.{emb_prop} AS embedding
+                WHERE player IS NOT NULL AND position = $position
                 RETURN player, position, embedding
             """
             params = {'position': position}
@@ -1157,9 +1276,9 @@ class FPLGraphRetrieval:
                 WHERE p.{emb_prop} IS NOT NULL
                 OPTIONAL MATCH (p)-[:PLAYS_AS]->(pos:Position)
                 WITH p.player_element AS player_id,
-                     COLLECT(DISTINCT p.player_name)[0] AS player,
-                     COLLECT(DISTINCT pos.name)[0] AS position,
-                     p.{emb_prop} AS embedding
+                    COLLECT(DISTINCT p.player_name)[0] AS player,
+                    COLLECT(DISTINCT pos.name)[0] AS position,
+                    p.{emb_prop} AS embedding
                 WHERE player IS NOT NULL
                 RETURN player, position, embedding
             """
@@ -1191,7 +1310,8 @@ class FPLGraphRetrieval:
             similarities.append({
                 'player': player_name,
                 'position': player['position'],
-                'similarity_score': round(similarity, 4)
+                'similarity_score': round(similarity, 4),
+                'embedding_type': embedding_type
             })
         
         similarities.sort(key=lambda x: x['similarity_score'], reverse=True)
@@ -1298,30 +1418,37 @@ class FPLGraphRetrieval:
         return results
     
     def embedding_retrieve(self, criteria: Dict = None, position: str = None, 
-                           top_k: int = 10) -> Dict[str, Any]:
+                        top_k: int = 10, embedding_type: str = 'numeric') -> Dict[str, Any]:
         """
-        Retrieve similar players based on criteria.
+        Retrieve similar players based on criteria using specified embedding type.
         
         Args:
             criteria: Dictionary of desired attributes
-                      e.g., {'goals': 'high', 'assists': 'high'}
             position: Filter by position (GK, DEF, MID, FWD)
             top_k: Number of results
-            
-        Returns:
-            Dictionary with search results
+            embedding_type: 'numeric', 'minilm', or 'mpnet'
         """
         if criteria is None:
             criteria = {'total_points': 'high'}
         
-        query_embedding = self.create_query_embedding(criteria)
-        results = self.semantic_search(query_embedding, top_k, position)
+        if embedding_type == 'numeric':
+            # For numeric embeddings, create query vector from criteria
+            query_embedding = self.create_query_embedding(criteria)
+        else:
+            # For text embeddings, convert criteria to text query
+            query_text = self._criteria_to_text_query(criteria, position)
+            model_name = 'model_1' if embedding_type == 'minilm' else 'model_2'
+            model = self.embedding_models[model_name]
+            query_embedding = model.encode([query_text], convert_to_numpy=True)[0]
+        
+        results = self.semantic_search(query_embedding, top_k, position, embedding_type)
         
         return {
-            'method': 'numeric_embedding',
+            'method': f'{embedding_type}_embedding',
             'criteria': criteria,
             'position_filter': position,
-            'embedding_dimensions': 12,
+            'embedding_type': embedding_type,
+            'embedding_dimensions': query_embedding.shape[0],
             'results': results
         }
     
@@ -1373,70 +1500,159 @@ class FPLGraphRetrieval:
     # COMBINED RETRIEVAL
     # =========================================================================
     
-    def retrieve(self, user_input: str, method: str = 'both') -> Dict[str, Any]:
+    def retrieve(self, user_input: str, method: str = 'both', 
+                embedding_type: str = 'numeric') -> Dict[str, Any]:
         """
         Main retrieval method combining baseline and embeddings.
         
         Args:
             user_input: Raw user query
             method: 'baseline', 'embedding', or 'both'
+            embedding_type: 'numeric', 'minilm', or 'mpnet' - which embedding to use
         """
         results = {'user_input': user_input}
         
-        if method in ['baseline', 'both']:
-            results['baseline'] = self.baseline_retrieve(user_input)
+        # Always run baseline for intent/entity extraction
+        baseline_result = self.baseline_retrieve(user_input)
+        results['baseline'] = baseline_result
         
-        # Determine if embedding retrieval is applicable for this query
-        # Some queries return non-player data or require specific lookups
-        queries_with_embeddings = {
-            'top_players_by_position',      # ✓ Player similarity by position
-            'top_scorers',                   # ✓ Player similarity by goals
-            'top_assisters',                 # ✓ Player similarity by assists
-            'clean_sheet_leaders',           # ✓ Defender/GK similarity
-            'players_by_form',               # ✓ Player similarity by form
-            'bonus_leaders',                 # ✓ Player similarity by bonus points
-            'most_cards',                    # ✓ Player similarity by cards
-            'player_season_summary',         # ✓ Find similar players to reference player
-        }
-        
-        # Queries that cannot use embeddings (return non-player or specific data):
-        # - team_fixtures: Returns fixture data, not players
-        # - player_gameweek_performance: Returns specific player's specific gameweek
-        # - compare_players: Returns comparison of 2 specific players
-        # - players_by_team: Returns players on a specific team (not semantic search)
+        preprocessed = self.preprocessor.preprocess(user_input, include_embedding=False)
+        query_used = baseline_result.get('query_used', 'top_scorers')
+        entities = preprocessed.get('entities', {})
         
         if method in ['embedding', 'both']:
-            preprocessed = self.preprocessor.preprocess(user_input, include_embedding=False)
-            query_used = results.get('baseline', {}).get('query_used', 'top_scorers')
+            # Determine if this query type can benefit from embeddings
+            # ALL player-centric queries should use embeddings
+            player_centric_queries = {
+                'top_players_by_position',      # ✓ Player similarity by position
+                'top_scorers',                   # ✓ Player similarity by goals
+                'top_assisters',                 # ✓ Player similarity by assists
+                'clean_sheet_leaders',           # ✓ Defender/GK similarity
+                'players_by_form',               # ✓ Player similarity by form
+                'bonus_leaders',                 # ✓ Player similarity by bonus points
+                'most_cards',                    # ✓ Player similarity by cards
+                'player_season_summary',         # ✓ Find similar players to reference player
+                'compare_players',               # ✓ Find similar players to both
+                'players_by_team',               # ✓ Find similar players on other teams
+                'player_gameweek_performance',   # ✓ Find similar players with similar performances
+            }
             
-            # Only use embeddings for queries where semantic search makes sense
-            if query_used in queries_with_embeddings:
-                criteria = preprocessed.get('search_criteria', {'avg_points_per_game': 'high'})
-                # Safely extract position: if positions list is empty, use None
-                positions = preprocessed.get('entities', {}).get('positions', [])
-                position = positions[0] if positions and len(positions) > 0 else None
-                results['embedding'] = self.embedding_retrieve(criteria=criteria, position=position, top_k=10)
+            if query_used in player_centric_queries:
+                # Extract position from query if available
+                positions = entities.get('positions', [])
+                position = positions[0] if positions else None
+                
+                # Get search criteria from preprocessed query
+                search_criteria = preprocessed.get('search_criteria', {})
+                
+                if embedding_type == 'numeric':
+                    # Use numeric embeddings
+                    results['embedding'] = self.embedding_retrieve(
+                        criteria=search_criteria, 
+                        position=position, 
+                        top_k=10
+                    )
+                elif embedding_type == 'minilm':
+                    # Use MiniLM text embeddings
+                    # Convert search criteria to natural language query
+                    query_text = self._criteria_to_text_query(search_criteria, position)
+                    results['embedding'] = self.search_with_text_embedding(
+                        query=query_text,
+                        model_name='model_1',
+                        top_k=10,
+                        position=position
+                    )
+                elif embedding_type == 'mpnet':
+                    # Use MPNet text embeddings
+                    query_text = self._criteria_to_text_query(search_criteria, position)
+                    results['embedding'] = self.search_with_text_embedding(
+                        query=query_text,
+                        model_name='model_2',
+                        top_k=10,
+                        position=position
+                    )
+                
+                results['embedding']['embedding_type'] = embedding_type
             else:
                 results['embedding'] = {
                     'method': 'skipped',
-                    'reason': f'Query "{query_used}" returns specific/non-player data; embeddings not applicable',
-                    'results': []
+                    'reason': f'Query "{query_used}" may not benefit from player embeddings',
+                    'embedding_type': embedding_type
                 }
         
-        if method == 'both':
-            # Only merge if embeddings were actually used
+        if method == 'both' and 'embedding' in results:
+            # Merge results if embeddings were actually used
             embedding_results = results.get('embedding', {}).get('results', [])
+            baseline_results = results.get('baseline', {}).get('results', [])
+            
             if embedding_results:  # Only merge if embeddings returned results
-                results['combined'] = self._merge_results(
-                    results.get('baseline', {}).get('results', []),
-                    embedding_results
-                )
+                results['combined'] = self._merge_results(baseline_results, embedding_results)
             else:
                 # Use only baseline results if embeddings skipped or empty
-                results['combined'] = results.get('baseline', {}).get('results', [])
+                results['combined'] = baseline_results
         
         return results
-    
+
+    def _criteria_to_text_query(self, criteria: Dict, position: str = None) -> str:
+        """
+        Convert search criteria to natural language query for text embeddings.
+        
+        Example: {'goals': 'high', 'assists': 'high'} -> 
+                "Players with high goals and assists"
+        """
+        parts = []
+        
+        # Map criteria values to natural language
+        value_map = {
+            'high': 'high',
+            'low': 'low',
+            'good': 'good',
+            'bad': 'poor'
+        }
+        
+        # Map criteria keys to natural language
+        criteria_map = {
+            'goals': 'goals',
+            'assists': 'assists', 
+            'total_points': 'FPL points',
+            'clean_sheets': 'clean sheets',
+            'bonus': 'bonus points',
+            'minutes': 'minutes played',
+            'form': 'form',
+            'ict_index': 'ICT index',
+            'influence': 'influence',
+            'creativity': 'creativity',
+            'threat': 'threat',
+            'cards': 'cards',
+            'saves': 'saves',
+            'value': 'value',
+            'ownership': 'ownership'
+        }
+        
+        for key, value in criteria.items():
+            if key in criteria_map and value in value_map:
+                parts.append(f"{value_map[value]} {criteria_map[key]}")
+        
+        # Build the query
+        if position:
+            position_map = {
+                'FWD': 'forwards',
+                'MID': 'midfielders', 
+                'DEF': 'defenders',
+                'GK': 'goalkeepers'
+            }
+            position_text = position_map.get(position, 'players')
+            if parts:
+                query = f"{position_text} with " + " and ".join(parts)
+            else:
+                query = f"best {position_text}"
+        else:
+            if parts:
+                query = "Players with " + " and ".join(parts)
+            else:
+                query = "best players"
+        
+        return query    
     def _merge_results(self, baseline_results: List, embedding_results: List) -> List:
         """Merge results from both methods, removing duplicates."""
         combined = baseline_results.copy() if baseline_results else []
@@ -2432,18 +2648,31 @@ def test_each_template_with_example_query():
 
 
 if __name__ == "__main__":
-    # ═════════════════════════════════════════════════════════════════════════
-    # NEO4J CONNECTION VARIABLES
-    # ═════════════════════════════════════════════════════════════════════════
-    NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io "
+    NEO4J_URI = "neo4j+s://1da86c19.databases.neo4j.io"
     NEO4J_USER = "neo4j"
     NEO4J_PASSWORD = "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8"
     
-    # Test 1: Show the TWO EXPERIMENTS (Baseline vs Baseline+Embeddings)
+    # Initialize retriever
+    retriever = FPLGraphRetrieval(
+        neo4j_uri=NEO4J_URI,
+        neo4j_user=NEO4J_USER,
+        neo4j_password=NEO4J_PASSWORD
+    )
+    
+    print("=" * 80)
+    print("STORING ALL EMBEDDINGS IN NEO4J")
+    print("=" * 80)
+    
+    # Store ALL embedding types
+    results = retriever.store_all_embeddings()
+    
+    print("\n✅ ALL EMBEDDINGS STORED")
+    print(f"Numeric: {results['numeric'].get('embeddings_stored')} players")
+    print(f"MiniLM: {results['minilm'].get('embeddings_stored')} players")
+    print(f"MPNet: {results['mpnet'].get('embeddings_stored')} players")
+    
+    # Optional: Run the template tests after
+    print("\n" + "=" * 80)
+    print("RUNNING TEMPLATE TESTS")
+    print("=" * 80)
     test_each_template_with_example_query()
-    
-    print("\n\n")
-    
-    # Test 2: Compare the TWO EMBEDDING MODELS (MiniLM vs MPNet)
-    # Note: Run this after embeddings are stored
-    # test_full_embedding_comparison()

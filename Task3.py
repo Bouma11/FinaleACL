@@ -53,10 +53,9 @@ retriever = FPLGraphRetrieval(
 
 from openai import OpenAI
 from kaggle_secrets import UserSecretsClient
-def call_llm(user_question: str, model: str) -> str:
+def call_llm(user_question: str, model: str, embedding_type: str = 'numeric') -> str:
     """
-    Takes only the user question, handles retrieval, formatting, and
-    calls the LLM. Returns the answer.
+    Takes user question, handles retrieval with specified embedding type.
     """
 
     # 1️⃣ Get API key
@@ -70,7 +69,8 @@ def call_llm(user_question: str, model: str) -> str:
     )
 
     
-    result = retriever.retrieve(user_question, method="both")
+    result = retriever.retrieve(user_question, method="both", embedding_type=embedding_type)
+
     # print("="*50)
     # print("RETRIEVAL DEBUG:")
     # print(f"Intent detected: {result.get('baseline', {}).get('intent')}")
@@ -78,7 +78,7 @@ def call_llm(user_question: str, model: str) -> str:
     # print(f"Parameters: {result.get('baseline', {}).get('parameters')}")
     # print(f"Results: {result.get('baseline', {}).get('results', [])[:2]}")  # First 2 results
     # print("="*50)
-    # print(result)
+    print(result)
     
 
     context_text = result
@@ -685,32 +685,41 @@ def calculate_similarity(answer: str, ground_truth: str) -> float:
 
 def main():
     user_question = input("Hey manager, what do you need to know?: ")
+    
     models = {
-    "1": "mistralai/mistral-7b-instruct:free",
-    "2":  "meta-llama/llama-3.3-70b-instruct:free",
-    "3": "mistralai/devstral-2512:free",
-    "4": "google/gemini-2.0-flash-exp:free",
-
-        
-   
+        "1": "mistralai/mistral-7b-instruct:free",
+        "2": "meta-llama/llama-3.3-70b-instruct:free",
+        "3": "mistralai/devstral-2512:free",
+        "4": "google/gemini-2.0-flash-exp:free",
     }
-
-    # Ask user for input
-    choice = input("Choose a model (1, 2, 3,4): ").strip()
-
-    # Get the corresponding model
-    if choice in models:
-        model = models[choice]
     
-        print(f"You selected Model {choice}: {model}")
+    embedding_types = {
+        "1": "numeric",
+        "2": "minilm", 
+        "3": "mpnet"
+    }
+    
+    # Ask for model choice
+    model_choice = input("Choose a model (1-4): ").strip()
+    
+    # Ask for embedding type choice
+    print("\nEmbedding types:")
+    print("1. Numeric (fast, stat-based)")
+    print("2. MiniLM (semantic, good balance)")
+    print("3. MPNet (most accurate semantic)")
+    embedding_choice = input("Choose embedding type (1-3): ").strip()
+    
+    if model_choice in models and embedding_choice in embedding_types:
+        model = models[model_choice]
+        embedding_type = embedding_types[embedding_choice]
+        
+        print(f"You selected Model {model_choice}: {model}")
+        print(f"Using {embedding_type} embeddings")
+        
+        answer = call_llm(user_question, model, embedding_type)
+        print("\nLLM Answer:\n", answer[0])
     else:
-        print("Invalid choice. Please enter 1, 2, 3,4.")
-        model = None
-
-    
-    answer = call_llm(user_question, model)
-    print("\nLLM Answer:\n", answer[0])
-
+        print("Invalid choice.")
 
 if __name__ == "__main__":
     main()
