@@ -1,3 +1,6 @@
+%%writefile fpl_input_preprocessing.py
+
+
 """
 Enhanced FPL Input Preprocessor with Robust LLM-based Multi-Entity Extraction
 """
