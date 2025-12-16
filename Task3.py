@@ -687,10 +687,9 @@ def main():
     user_question = input("Hey manager, what do you need to know?: ")
     
     models = {
-        "1": "mistralai/mistral-7b-instruct:free",
-        "2": "meta-llama/llama-3.3-70b-instruct:free",
-        "3": "mistralai/devstral-2512:free",
-        "4": "google/gemini-2.0-flash-exp:free",
+    "1": "mistralai/devstral-2512:free",
+    "2":  "meta-llama/llama-3.3-70b-instruct:free",
+    "3": "nvidia/nemotron-3-nano-30b-a3b:free",
     }
     
     embedding_types = {
@@ -700,7 +699,7 @@ def main():
     }
     
     # Ask for model choice
-    model_choice = input("Choose a model (1-4): ").strip()
+    model_choice = input("Choose a model (1-3): ").strip()
     
     # Ask for embedding type choice
     print("\nEmbedding types:")
