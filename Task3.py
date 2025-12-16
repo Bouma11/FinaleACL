@@ -18,7 +18,12 @@ def load_config():
                 line = line.strip()
                 if "=" in line and not line.startswith("#"):
                     k, v = line.split("=", 1)
-                    config[k.strip()] = v.strip()
+                    # Strip whitespace and remove surrounding quotes if present
+                    value = v.strip()
+                    # Remove quotes if the value is wrapped in them
+                    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                        value = value[1:-1]
+                    config[k.strip()] = value
     except FileNotFoundError:
         print("⚠️  config.txt not found. Using environment variables or defaults.")
     return config
@@ -50,17 +55,23 @@ NEO4J_URI = (
     _config.get("URI") or 
     _config.get("NEO4J_URI") or 
     os.getenv("NEO4J_URI", "neo4j+s://1da86c19.databases.neo4j.io")
-)
+).strip()  # Ensure no extra whitespace
+
 NEO4J_USER = (
     _config.get("USERNAME") or 
     _config.get("NEO4J_USER") or 
     os.getenv("NEO4J_USER", "neo4j")
-)
+).strip()  # Ensure no extra whitespace
+
 NEO4J_PASSWORD = (
     _config.get("PASSWORD") or 
     _config.get("NEO4J_PASSWORD") or 
     os.getenv("NEO4J_PASSWORD", "HA4iunTOGen7RYpeISs3ZRhcWjpcokqam9przCqCuQ8")
-)
+).strip()  # Ensure no extra whitespace
+
+# Validate URI format
+if not NEO4J_URI.startswith(("neo4j://", "neo4j+s://", "bolt://", "bolt+s://")):
+    raise ValueError(f"Invalid Neo4j URI format: {NEO4J_URI}. Must start with neo4j://, neo4j+s://, bolt://, or bolt+s://")
 
 # ─────────────────────────────────────────────────────────────
 # API KEYS FROM CONFIG (supports multiple naming conventions)
